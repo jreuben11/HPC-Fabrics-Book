@@ -64,11 +64,25 @@ make -j$(nproc)
 
 ---
 
+## Introduction
+
+The RDMA verbs API (Chapter 2) is powerful but transport-specific: code written against InfiniBand verbs does not automatically run over AWS EFA, HPE Slingshot, or Intel Omni-Path. At the same time, collective runtimes like NCCL and OpenMPI must run efficiently across all of these transports plus shared memory and plain TCP — often simultaneously within a heterogeneous cluster. The solution is a transport abstraction layer, and two competing standards dominate this space: UCX (Unified Communication X) and LibFabric (OpenFabrics Interface, OFI).
+
+UCX originated at Mellanox and is tightly coupled to RDMA semantics. It has a two-layer architecture: UCT (transport layer) provides raw tagged messaging, RMA, and atomic operations; UCP (protocol layer) adds connection management, multi-rail selection, rendezvous for large messages, and the tagged-send API used by MPI. NCCL uses UCX on InfiniBand and RoCE clusters; OpenMPI uses it nearly universally. UCX's transport scoring mechanism automatically selects the best available transport — RC for RDMA, shared memory for co-located processes, TCP as a universal fallback — without any application changes.
+
+LibFabric takes a more abstract approach: it defines a minimal set of endpoint capabilities (message passing, tagged operations, RMA, atomics) and lets provider libraries implement them for each fabric. This makes LibFabric the dominant choice on AWS EFA, HPE Slingshot (CXI provider), and Intel Omni-Path (PSM3 provider), all of which expose fabric-specific optimizations through OFI's provider interface rather than through a common RDMA verbs stack.
+
+PMIx (Process Management Interface for Exascale) solves a completely orthogonal problem: how do N processes on N nodes discover each other before any messaging can begin? The PMIx wire-up protocol, driven by the job scheduler, allows ranks to publish and retrieve endpoint addresses through a per-node daemon, completing the bootstrap in seconds even for jobs spanning thousands of nodes. PMIx v5 extends this with fault notification, enabling training frameworks to detect and respond to rank failures.
+
+The chapter closes with an introduction to CXL (Compute Express Link), the emerging cache-coherent memory fabric that extends the GPU memory hierarchy across PCIe to shared memory pools and, in CXL 3.0, to multi-host shared memory — foreshadowing a future where the boundary between node-local and network-attached memory blurs further. The lab walkthrough exercises UCX transport selection, LibFabric provider enumeration, and performance measurement using the built-in tooling — all on a single host with no specialized NIC required.
+
+---
+
 ## 4.1 The Portability Problem
 
-A GPU cluster is never purely homogeneous. InfiniBand HDR links connect some server pairs; RoCEv2 over Ethernet connects others; NVLink connects GPUs within a node; shared memory connects processes on the same host. A collective library like NCCL must run efficiently over all of these without reimplementing the low-level transport for each one.
+A GPU cluster is never purely homogeneous. InfiniBand HDR links connect some server pairs; RoCEv2 over Ethernet connects others; NVLink connects GPUs within a node; shared memory connects processes on the same host. A collective library like NCCL (NVIDIA Collective Communications Library) must run efficiently over all of these without reimplementing the low-level transport for each one.
 
-UCX and LibFabric solve this by providing a **unified, transport-agnostic messaging API** that selects the fastest available transport at runtime. NCCL uses UCX; OpenMPI can use either. PMIx solves the orthogonal problem of *bootstrapping* — how do N processes on N hosts find each other at startup?
+UCX and LibFabric solve this by providing a **unified, transport-agnostic messaging API** that selects the fastest available transport at runtime. NCCL uses UCX; OpenMPI (the dominant open-source MPI implementation used in HPC and AI clusters) can use either. PMIx solves the orthogonal problem of *bootstrapping* — how do N processes on N hosts find each other at startup?
 
 ---
 
@@ -154,7 +168,7 @@ UCC API
  └────────────────────────────────┘
 ```
 
-SHARP (Scalable Hierarchical Aggregation and Reduction Protocol) offloads AllReduce computation to switch ASICs — the first `tl_sharp` component competes allreduce in the network without involving host CPUs at all.
+SHARP (Scalable Hierarchical Aggregation and Reduction Protocol) is an NVIDIA Spectrum switch feature that offloads AllReduce computation to switch ASICs — the `tl_sharp` component completes AllReduce in the network without involving host CPUs at all.
 
 ---
 
@@ -172,9 +186,9 @@ libfabric API (fi_*)
  ┌──┴────────────────────────────────┐
  │  Providers                        │
  │  verbs    ← libibverbs / RoCE/IB │
- │  efa      ← AWS Elastic Fabric   │
- │  psm3     ← Intel Omni-Path      │
- │  cxi      ← HPE Slingshot        │
+ │  efa      ← AWS Elastic Fabric Adapter (low-latency HPC NIC on EC2) │
+ │  psm3     ← Intel Omni-Path 3 (PSM = Performance Scaled Messaging)  │
+ │  cxi      ← HPE Slingshot (CXI = Cassini eXpress Interconnect)      │
  │  tcp      ← TCP fallback         │
  │  shm      ← shared memory        │
  └───────────────────────────────────┘
@@ -231,6 +245,7 @@ fi_info --list
 fi_info -p verbs
 
 # Run latency/bandwidth pingpong test with specific provider
+# fi_pingpong is libfabric's built-in client/server latency benchmark
 fi_pingpong -p cxi     # HPE Slingshot
 fi_pingpong -p verbs   # InfiniBand / RoCE
 ```
@@ -246,9 +261,9 @@ When a 1000-rank MPI job starts, every rank needs to know the network address of
 ### 4.4.2 PMIx Architecture
 
 ```
-Job scheduler (SLURM / PBS)
+Job scheduler (SLURM / PBS)              ← workload managers that launch MPI/AI jobs
         │  spawns
-    PMIx server (per-node daemon, e.g., prte, prrte)
+    PMIx server (per-node daemon, e.g., prte, prrte)  ← PRRTE = PMIx Reference RunTime Environment
         │  PMIx wire protocol
 Application process (MPI rank / NCCL rank)
         │  calls

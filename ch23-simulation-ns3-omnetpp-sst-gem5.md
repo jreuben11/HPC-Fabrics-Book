@@ -94,6 +94,20 @@ scons build/X86/gem5.opt -j$(nproc)
 
 ---
 
+## Introduction
+
+Chapter 23 covers the four simulation tools that research and engineering teams use when they need to explore network behavior at a scale, fidelity, or parameter range that physical hardware or container-based emulation cannot reach: NS-3 for protocol-level discrete-event simulation, OMNET++ for modular C++ network modeling, SST for HPC interconnect and memory subsystem simulation, and GEM5 for full-system cycle-accurate hardware modeling. The Lab Walkthrough drives a DCQCN ECN threshold sweep across a simulated fat-tree fabric, producing a flow completion time curve that shows the optimal marking threshold for a given bandwidth-delay product.
+
+The distinction between emulation and simulation is fundamental. Containerlab (Chapter 21) runs real NOS software, real Linux kernels, and real protocol state machines — it is the right tool for testing configuration correctness and protocol behavior. Simulation, by contrast, replaces all of that with mathematical models that execute faster than real time and allow parameter spaces to be explored at 10,000-node scale, or over hardware designs that do not yet exist. The cost is validity: a simulation is only as good as its model, and maintaining the gap between model and physical reality is a continuous engineering discipline.
+
+Chapter 22 established the CI pipeline for catching configuration bugs early. Chapter 23 addresses the complementary problem: designing the fabric correctly from the start, before any hardware is ordered. Chapters 24 and beyond return to physical-fabric topics, but the simulation techniques here remain relevant whenever a new congestion control algorithm, a new topology design, or a new NIC ASIC needs to be evaluated before the capital expenditure is committed.
+
+The four tools divide naturally into two pairs. NS-3 and OMNET++ both target network-protocol simulation and share the discrete-event simulation model; the choice between them is largely one of language preference (Python/C++ vs pure C++) and ecosystem (NS-3 is dominant in the RDMA/congestion-control literature; OMNET++ has a richer GUI and the INET protocol library). SST and GEM5 target hardware simulation: SST at the interconnect and memory-hierarchy level, GEM5 at the CPU microarchitecture level with PCIe and NIC models.
+
+Section 23.1 frames when to choose simulation over emulation. Sections 23.2–23.5 cover each tool with worked code examples. Section 23.6 provides a decision tree. The Lab Walkthrough executes a full DCQCN parameter sweep in NS-3 and smoke-tests the other three simulators, with annotated expected output at every step.
+
+---
+
 ## 23.1 When to Simulate vs Emulate
 
 Containerlab (Chapter 21) provides *emulation*: real NOS software running on real Linux, producing real packet flows. Emulation is the right tool for testing configuration, protocol behavior, and operational procedures.
@@ -374,7 +388,7 @@ git clone https://github.com/alibaba-edu/High-Precision-Congestion-Control.git
 cd High-Precision-Congestion-Control
 ```
 
-Configure and build (uses the older `waf` build system bundled in the repo):
+Configure and build (uses `waf`, a Python-based build system that the NS-3 project bundled before migrating to CMake; the HPCC fork still ships its own `waf` script in the repo root and is invoked directly as `./waf`):
 
 ```bash
 ./waf configure --build-profile=optimized
@@ -742,7 +756,7 @@ Expected output:
 SST-Core Version (13.1.0)
 ```
 
-Run the Miranda memory test (exercises the SST memory hierarchy components):
+Run the Miranda memory test (Miranda is SST's built-in synthetic memory-access benchmark; it generates a programmable stream of read/write requests through the SST memory hierarchy components and reports average latency and throughput, making it the standard first smoke-test for an SST installation):
 
 ```bash
 sst memH/tests/miranda.py

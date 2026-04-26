@@ -22,6 +22,8 @@ containerlab version
 
 ### FRR (for host containers and bare-metal testing)
 
+FRR (Free Range Routing) is an open-source IP routing suite that implements BGP, OSPF, IS-IS, and other protocols. It is used here to run BGP-EVPN on Linux hosts and leaf switches.
+
 ```bash
 sudo apt install -y frr frr-pythontools
 # Enable EVPN-related daemons
@@ -39,11 +41,27 @@ cmake --version
 
 ### Python environment (device automation)
 
+`netmiko` is a Python library for SSH-based network device automation; `ncclient` is a Python client for the NETCONF protocol (covered in depth in Chapter 14).
+
 ```bash
 uv venv .venv && source .venv/bin/activate
 uv pip install netmiko ncclient
 python -c "import netmiko, ncclient; print('OK')"
 ```
+
+---
+
+## Introduction
+
+AI compute clusters run two fundamentally different classes of network traffic simultaneously. The first is the GPU-to-GPU collective communication fabric — low-latency, high-bandwidth RDMA flows that must cross the physical network without encapsulation overhead. The second is the management and multi-tenant fabric — container orchestration, storage access, monitoring pipelines, and tenant isolation — where the ability to define isolated Layer 2 domains across a shared routed underlay is essential. This chapter addresses the second class.
+
+VXLAN (Virtual Extensible LAN) and BGP-EVPN (Ethernet VPN) are the industry-standard answer for building scalable overlay networks on top of a pure IP underlay. VXLAN extends Ethernet frames across the IP fabric using UDP encapsulation with 24-bit segment identifiers, providing 16 million logical isolation domains in place of the 4094 VLAN limit. BGP-EVPN eliminates the flooding required to learn remote MAC and IP addresses by distributing that reachability information as BGP routes, enabling data centers with thousands of endpoints to operate without BUM (Broadcast, Unknown-unicast, Multicast) flooding at scale.
+
+Open vSwitch (OVS) and Open Virtual Network (OVN) bring this overlay model into the host: OVS is a production-quality software switch with kernel and DPDK fast paths that implements VXLAN tunneling and an OpenFlow-programmable forwarding pipeline, while OVN adds a logical abstraction layer — logical switches, routers, and ACLs — that OVN compiles down to per-host OVS flow rules. Together they form the datapath that Kubernetes CNIs such as OVN-Kubernetes rely on to implement pod networking.
+
+The reader will leave this chapter able to build a BGP-EVPN overlay fabric from first principles, inspect and program the OVS OpenFlow pipeline, and configure OVN logical networks. The lab walkthrough constructs a four-leaf, two-spine EVPN fabric in Containerlab with SONiC-VS leaves and SR Linux spines, and traces a live VXLAN-encapsulated packet from source to destination.
+
+This chapter sits within Part IV alongside Chapters 12 and 13. Chapter 12 builds on the overlay model by showing how Cilium uses eBPF to replace the OVS/iptables datapath entirely. Chapter 13 extends the Kubernetes pod networking model to support multiple NICs per pod — the prerequisite for attaching a pod to both the overlay management network and the RDMA data-plane network simultaneously.
 
 ---
 
@@ -380,7 +398,7 @@ OVN's `ovn-controller` on each host translates these logical definitions into OV
 
 ## Lab Walkthrough 11 — EVPN Fabric with SONiC-VS and FRR
 
-This walkthrough builds a full BGP-EVPN overlay fabric using Containerlab with SR Linux spines, SONiC-VS leaves, and Linux host containers running FRR. Every command is shown with expected output.
+This walkthrough builds a full BGP-EVPN overlay fabric using Containerlab with SR Linux spines, SONiC-VS leaves, and Linux host containers running FRR. SR Linux is Nokia's open, model-driven network operating system available as a free container image for lab use. SONiC-VS (Software for Open Networking in the Cloud — Virtual Switch) is the virtual/containerized form of Microsoft's open-source SONiC NOS, widely deployed on merchant-silicon switches in hyperscale data centers. Every command is shown with expected output.
 
 ### Step 1 — Write the Containerlab topology file
 
@@ -503,7 +521,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep evpn-lab
 
 ### Step 3 — Configure the BGP underlay (eBGP on each leaf)
 
-Shell into leaf1's FRR daemon:
+Shell into leaf1's FRR daemon. `vtysh` is FRR's unified configuration shell — it presents a Cisco-like CLI that wraps all FRR daemons (zebra, bgpd, etc.) in a single interactive interface.
 
 ```bash
 docker exec -it clab-evpn-lab-leaf1 vtysh
@@ -666,7 +684,7 @@ Route Distinguisher: 10.1.1.4:100
                     ET:8 RT:65001:100
 ```
 
-The `[3]` entries are Type 3 routes (VTEP membership/IMET). After host-a sends its first packet, Type 2 routes appear:
+The `[3]` entries are Type 3 routes (VTEP membership/IMET — Inclusive Multicast Ethernet Tag, the EVPN route type that advertises a VTEP's presence in a VNI and is used to build the BUM flood list). After host-a sends its first packet, Type 2 routes appear:
 
 ```bash
 docker exec -it clab-evpn-lab-leaf1 vtysh -c "show bgp l2vpn evpn route type macip"

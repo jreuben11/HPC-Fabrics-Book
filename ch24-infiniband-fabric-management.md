@@ -72,6 +72,20 @@ uv run python -c "import prometheus_client, pandas; print('prometheus_client:', 
 
 ---
 
+## Introduction
+
+Chapter 24 covers InfiniBand fabric management from first principles — the transport model that distinguishes IB from RoCEv2, the Subnet Manager that is IB's central architectural feature, the diagnostic tools that expose fabric health and routing state, and the Priority Flow Control mechanism that must be correctly configured for lossless RDMA. The Lab Walkthrough instantiates a two-node InfiniBand fabric using the `rdma_rxe` software HCA module, runs OpenSM to assign LIDs and program forwarding tables, and validates performance with the perftest benchmark suite.
+
+InfiniBand occupies a distinct position in the AI infrastructure landscape. While the industry trend toward RoCEv2 on commodity Ethernet is real and accelerating, IB retains dominance in on-premises HPC and AI installations where fabric management predictability, sub-microsecond latency, and native lossless operation outweigh the switch cost premium. Understanding IB fabric management is also directly useful for RoCEv2 operations: the same LID-based addressing, the same MAD-based diagnostics, and the same PFC lossless requirements appear in both transport families, and the tooling (`ibstat`, `ibnetdiscover`, `perfquery`) is shared across both.
+
+Chapter 23 covered simulation tools including NS-3's RdmaHw module, which models the exact DCQCN and ECN thresholds discussed in Sections 24.5–24.6. Chapter 24 deals with the physical reality those simulations represent. Chapter 25 extends RDMA management to the cloud — AWS EFA, Azure RDMA, and GCP TCPX — where the fabric is managed by the cloud provider but the host-side configuration remains the operator's responsibility.
+
+The Subnet Manager is what makes IB distinct. Every IB port in the fabric is in the `INIT` state at power-on; without a running SM, no data path is operational. The SM discovers the topology via directed-route MADs, assigns 16-bit LIDs to every port, computes full mesh paths using a configurable routing algorithm (FTREE, LASH, DOR), and programs Linear Forwarding Tables into every switch. SM failover, sweep interval tuning, and partition key management are therefore critical operational disciplines rather than optional optimizations.
+
+Section 24.1 contrasts the IB and RoCEv2 transport models at the architectural level. Sections 24.2–24.3 cover OpenSM operation and the MAD-based diagnostic suite. Section 24.4 explains fat-tree routing algorithms. Section 24.5 addresses Priority Flow Control. Section 24.6 covers performance counter monitoring. Section 24.7 describes the Soft-IB kernel module used throughout the Lab Walkthrough.
+
+---
+
 ## 24.1 IB vs RoCEv2: Transport Model Differences
 
 InfiniBand and RoCEv2 share the same verbs API (libibverbs) and largely the same kernel subsystem (ib_core), but they differ fundamentally in their transport model, fabric management requirements, and congestion handling.
@@ -556,7 +570,7 @@ done
 
 ### 24.6.3 ibdump: Packet Capture
 
-`ibdump` captures IB packets to a pcap file, readable by Wireshark:
+`ibdump` is a Mellanox/NVIDIA utility that captures raw InfiniBand packets from an HCA port and writes them to a pcap file; Wireshark has a built-in IB dissector that decodes BTH, RETH, and MAD headers directly from the capture file. It captures IB packets to a pcap file, readable by Wireshark:
 
 ```bash
 # Capture on rxe0 port 1, write to file
@@ -893,7 +907,7 @@ perfquery 2 1
 
 ### Step 8: Run ib_write_bw between the two rxe endpoints
 
-The `perftest` suite provides the standard benchmark tools. Since both rxe devices are on the same host, use background process control:
+The `perftest` suite is the standard InfiniBand verbs benchmark package, providing tools such as `ib_write_bw`, `ib_read_bw`, `ib_send_bw`, and `ib_write_lat` that exercise the full RDMA send/receive and RDMA write/read verb paths and report bandwidth and latency against real queue pairs. Since both rxe devices are on the same host, use background process control:
 
 ```bash
 # Server on rxe0 (LID 1, IP 10.20.0.1)

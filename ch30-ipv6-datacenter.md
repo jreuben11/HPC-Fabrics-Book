@@ -49,6 +49,18 @@ sudo vtysh -c "show version"
 
 ---
 
+## Introduction
+
+IPv4 address exhaustion is not a distant concern for AI infrastructure engineers — it is an immediate, operational problem. A 10,000-GPU cluster with dual-port NICs consumes 20,000 host addresses before storage, management, BMCs, and Kubernetes pod CIDRs are accounted for. A single /16 IPv4 block, historically considered generous for a datacenter, is simply too small. And the workaround — NAT — is incompatible with RDMA: RoCEv2 and InfiniBand use memory registrations tied to actual IP addresses, and NAT breaks the transport by hiding those addresses from the remote peer.
+
+IPv6 was designed for this scale. A single /48 prefix, the standard site allocation, provides 65,536 /64 subnets. A /64 subnet supports 2^64 host addresses with SLAAC — Stateless Address Autoconfiguration — eliminating DHCP for link addresses. Every GPU node, every switch loopback, every pod gets a globally unique routable address, and RDMA, NCCL, and storage protocols see the actual peer address end-to-end with no translation in the path.
+
+This chapter covers the full deployment of IPv6 in an AI cluster fabric, working from first principles. Section 30.1 explains the motivating factors — address exhaustion, NAT incompatibility, and SLAAC simplicity. Section 30.2 establishes the addressing hierarchy (/48 site → /52 pod → /56 rack → /64 link → /128 loopback) that makes subnetting mechanical rather than a planning exercise. Sections 30.3–30.6 are hands-on: dual-stack BGP with FRR using MP-BGP address families, EVPN/VXLAN with IPv6 Type 2 and Type 5 routes, Cilium dual-stack CNI configuration, and SR Linux's per-subinterface IPv6 model. Section 30.7 covers the operational gotchas unique to IPv6 in AI clusters: RoCEv2's 40-byte GRH overhead and the MTU 9040 adjustment, PTP multicast group changes, and the `NCCL_SOCKET_IFNAME`/`GLOO_SOCKET_IFNAME` interface selection problem that causes silent IPv4 fallback.
+
+The lab walkthrough builds a Containerlab dual-stack fabric with FRR nodes, verifies prefix exchange with `vtysh`, demonstrates SLAAC autoconfiguration with `radvd`, uses Scapy to craft and send IPv4 and IPv6 ICMP packets through the fabric, and runs a 2-rank PyTorch Gloo AllReduce over IPv6 loopback to validate the training framework's IPv6 compatibility.
+
+This chapter is the capstone of the book's network layer coverage. It connects to Chapter 2 (RoCEv2 and GRH overhead), Chapter 3 (PTP multicast addressing), Chapter 8 (SONiC and FRR as the BGP routing plane), Chapter 11 (EVPN/VXLAN fundamentals), Chapter 12 (Cilium CNI), and Chapter 17 (BGP tooling). Chapters 26–29 assume the addressing and routing model built here when discussing zero-trust, adaptive routing, resilience, and scheduling in a dual-stack environment.
+
 ## 30.1 Why IPv6 in AI Cluster Fabrics
 
 ### 30.1.1 Address Space Exhaustion at Scale
@@ -83,7 +95,7 @@ IPv6 eliminates NAT. Every endpoint has a globally unique, routable address. RDM
 
 ### 30.1.4 SLAAC — Stateless Address Autoconfiguration
 
-SLAAC allows a host to configure its own IPv6 address from a Router Advertisement (RA) prefix without DHCP. The host derives a 64-bit Interface Identifier (IID) from its MAC address (EUI-64) or a privacy-stable algorithm, appends it to the /64 prefix from the RA, and begins using the resulting address immediately.
+SLAAC allows a host to configure its own IPv6 address from a Router Advertisement (RA) prefix without DHCP. The host derives a 64-bit Interface Identifier (IID) from its MAC address using EUI-64 — a standard method that inserts `ff:fe` in the middle of the 48-bit MAC and flips the universal/local bit to produce a 64-bit identifier — or a privacy-stable algorithm, appends it to the /64 prefix from the RA, and begins using the resulting address immediately.
 
 In AI cluster fabrics, SLAAC is valuable for:
 - **Management fabric:** BMCs, out-of-band switches, and management nodes auto-configure on day zero without a DHCP server.
@@ -169,7 +181,7 @@ ip -6 route show
 
 ### 30.3.1 Architecture
 
-FRR supports multi-protocol BGP (MP-BGP) with simultaneous IPv4 and IPv6 address families. In a dual-stack AI cluster, a single BGP session can carry both IPv4 unicast NLRI and IPv6 unicast NLRI — two address families on one TCP connection.
+FRR supports multi-protocol BGP (MP-BGP) with simultaneous IPv4 and IPv6 address families. In a dual-stack AI cluster, a single BGP session can carry both IPv4 unicast NLRI and IPv6 unicast NLRI — two address families on one TCP connection. NLRI (Network Layer Reachability Information) is the BGP term for the set of prefixes being advertised; AFI/SAFI (Address Family Identifier / Subsequent AFI) is the two-number code that identifies the address family being carried, where AFI=1/SAFI=1 means IPv4 unicast and AFI=2/SAFI=1 means IPv6 unicast.
 
 ```
 FRR Router A  ←——— eBGP session (IPv4 or IPv6 transport) ———→  FRR Router B
@@ -256,6 +268,8 @@ show bgp ipv6 unicast
 
 ## 30.4 IPv6 EVPN/VXLAN
 
+EVPN (Ethernet VPN, RFC 7432) is a BGP address family that distributes MAC and IP reachability information across a fabric, enabling network-wide MAC learning without flooding. VXLAN (Virtual Extensible LAN) is the commonly paired data-plane encapsulation that tunnels Layer 2 frames in UDP, using a 24-bit VNI (VXLAN Network Identifier) to identify the tenant segment. A VTEP (VXLAN Tunnel Endpoint) is the device — switch, router, or host NIC — that performs the VXLAN encapsulation and decapsulation at the boundary of the overlay.
+
 ### 30.4.1 Type 2 Routes — MAC/IP Advertisement with IPv6
 
 EVPN Type 2 routes carry MAC+IP bindings. In dual-stack deployments, a single endpoint generates two Type 2 routes: one with an IPv4 IP and one with an IPv6 IP bound to the same MAC.
@@ -307,7 +321,7 @@ sudo vtysh -c "show bgp l2vpn evpn route type prefix"
 
 ### 30.4.3 Symmetric IRB with IPv6
 
-Symmetric Integrated Routing and Bridging (IRB) routes traffic through the VTEP's IP-VRF in both directions:
+IRB (Integrated Routing and Bridging) is the technique of combining L2 bridging and L3 routing at the same VTEP, allowing it to route between VXLAN-bridged segments without hairpinning traffic to a dedicated router. Symmetric IRB routes traffic through the VTEP's IP-VRF in both the ingress and egress directions, meaning both the source and destination VTEPs perform a VRF lookup:
 
 ```
 Symmetric IRB packet flow (IPv6):
@@ -1100,6 +1114,8 @@ Results: IPv4=PASS  IPv6=PASS
 ```
 
 ### Step 6 — Configure IPv6 SLAAC with radvd on a Linux host container
+
+`radvd` (Router Advertisement Daemon) is the standard Linux daemon for sending IPv6 Router Advertisement messages as defined in RFC 4861; it periodically broadcasts the configured IPv6 prefix and router parameters on an interface, enabling attached hosts to autoconfigure their IPv6 addresses via SLAAC.
 
 Install and configure `radvd` inside frr1 to send Router Advertisements on the eth2 link (facing host1):
 

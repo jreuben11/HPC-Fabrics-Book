@@ -79,12 +79,26 @@ cmake --build build -j$(nproc)
 
 ---
 
+## Introduction
+
+The Linux kernel network stack is a marvel of software engineering — correct, secure, and general-purpose. It is also fundamentally unsuited to the demands of 400 Gbps line-rate packet processing. Each packet received through the kernel path requires a hardware interrupt, a `sk_buff` allocation, protocol demultiplexing, socket buffer copies, and a system call return. At 400 Gbps with 64-byte minimum frames, there are roughly 595 million packets per second, leaving less than 2 nanoseconds of CPU budget per packet — a single cache miss exceeds that budget. DPDK (Data Plane Development Kit) exists to solve this problem by eliminating the kernel from the data path entirely.
+
+DPDK is an open-source framework, primarily maintained under the Linux Foundation, that provides user-space poll-mode drivers (PMDs) for a broad range of NICs. Rather than waiting for interrupt-driven notifications, a DPDK application dedicates one or more CPU cores to busy-polling NIC receive rings directly from user space. Packets arrive into DPDK's `rte_mbuf` structures from DMA memory that the NIC and the CPU share via hugepages, with zero kernel involvement, zero copies, and zero system calls on the data path.
+
+This chapter builds the DPDK programming model from the environment abstraction layer (EAL) through hugepage configuration, NUMA-aware memory allocation, multi-queue RSS, hardware flow steering, and checksum offloads. The architecture is layered: EAL handles platform initialization and device binding; PMDs implement the NIC-specific DMA ring protocol; `rte_mempool` and `rte_mbuf` provide the packet buffer management layer; and application libraries (`rte_hash`, `rte_lpm`, `rte_acl`) implement forwarding-plane data structures.
+
+DPDK's primary role in AI cluster networking is in the DPU/SmartNIC programmable offload pipeline (Chapter 10) and in OVS-DPDK, the kernel-bypass virtual switch used to forward tenant traffic on multi-tenant AI cloud infrastructure. Understanding DPDK's poll-model, memory architecture, and flow-steering primitives is prerequisite for Chapter 10 and provides the conceptual foundation for contrasting with eBPF/XDP (Chapter 7), which achieves kernel-bypass-level performance for some workloads while retaining kernel integration.
+
+The lab walkthrough exercises DPDK end-to-end using the `net_tap` virtual device — no spare NIC is required — and measures achievable packet rates and CPU efficiency with and without checksum offload.
+
+---
+
 ## 5.1 The Problem with the Kernel Network Stack
 
 The Linux kernel network stack was designed for correctness and generality, not for sustained line-rate I/O. At 400 Gbps, a host receives 595 million packets per second (at 84-byte minimum frames). The kernel path for each packet involves:
 
-1. Hardware interrupt → interrupt handler → NAPI poll
-2. `sk_buff` allocation from slab
+1. Hardware interrupt → interrupt handler → NAPI poll (New API, the Linux kernel's interrupt-mitigation framework that coalesces packet delivery into polling bursts)
+2. `sk_buff` (socket buffer) allocation from slab — the kernel's per-packet metadata structure, roughly 200 bytes of overhead per packet
 3. Protocol processing (Ethernet → IP → TCP/UDP)
 4. Socket buffer copy into user space
 5. System call return
@@ -157,7 +171,7 @@ echo 4 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
 
 ### 5.2.3 CPU Affinity and NUMA
 
-DPDK pins each lcore (logical core) to a specific CPU core via `pthread_setaffinity_np`. For NUMA systems, memory is allocated from the socket local to the running lcore:
+DPDK pins each lcore (logical core) to a specific CPU core via `pthread_setaffinity_np`. For NUMA (Non-Uniform Memory Access) systems — servers with multiple CPU sockets, each with its own local DRAM — memory is allocated from the socket local to the running lcore, avoiding expensive cross-socket memory transactions:
 
 ```c
 // Allocate mempool on NUMA socket of port 0
@@ -202,7 +216,7 @@ while (1) {
 
 ### Device Binding
 
-DPDK requires unbinding a NIC from its kernel driver and binding it to `vfio-pci` (preferred) or `uio_pci_generic`:
+DPDK requires unbinding a NIC from its kernel driver and binding it to `vfio-pci` (preferred — Virtual Function I/O, a kernel framework for safe user-space DMA using IOMMU isolation) or `uio_pci_generic` (a simpler but less secure UIO driver without IOMMU protection):
 
 ```bash
 # Find PCI address
@@ -253,7 +267,7 @@ Mempool sizing: too small → exhaustion under burst; too large → cache pressu
 
 ## 5.5 Multi-Queue, RSS, and Flow Director
 
-Modern NICs expose multiple hardware Rx/Tx queues. DPDK exposes these directly:
+Modern NICs expose multiple hardware Rx/Tx queues. RSS (Receive Side Scaling) distributes incoming packets across queues by hashing packet headers, allowing multiple CPU cores to process traffic in parallel without contention. DPDK exposes these directly:
 
 ```c
 struct rte_eth_conf port_conf = {
@@ -332,7 +346,8 @@ mbuf->l3_len = sizeof(struct rte_ipv4_hdr);
 if (mbuf->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_BAD)
     rte_pktmbuf_free(mbuf);
 
-// TSO (TCP Segmentation Offload) — send one large buffer, NIC segments
+// TSO (TCP Segmentation Offload) — allows the application to pass a large
+// buffer and have the NIC split it into MTU-sized segments, saving CPU cycles
 mbuf->ol_flags |= RTE_MBUF_F_TX_TCP_SEG;
 mbuf->tso_segsz = 1460;
 ```
@@ -539,7 +554,7 @@ Total packets dropped:               0
 
 ### Step 5 — Interpret output: Mpps and Gbps at different frame sizes
 
-l2fwd prints per-second packet and byte rates when traffic is flowing continuously. To drive sustained traffic, use a packet generator. With `dpdk-pktgen` (build from source: https://github.com/pktgen/Pktgen-DPDK — no distro package exists) on the same machine via two TAP devices:
+l2fwd prints per-second packet and byte rates when traffic is flowing continuously. To drive sustained traffic, use a packet generator. With `dpdk-pktgen` (a DPDK-based traffic generator that can drive multiple ports at line rate with configurable frame sizes and patterns; build from source: https://github.com/pktgen/Pktgen-DPDK — no distro package exists) on the same machine via two TAP devices:
 
 ```bash
 # Create a veth pair bridged to two TAP devices for loopback testing
@@ -617,7 +632,7 @@ Example comparison (real NIC, 10GbE, 64B frames, 1 lcore):
 | Software checksum        | 14.8 | 100%  |
 | Hardware checksum offload| 14.8 | 72%   |
 
-The throughput stays the same (line-rate) but the lcore spends ~28% fewer cycles on checksum computation, freeing headroom for other work (ACL lookups, metering, encapsulation).
+The throughput stays the same (line-rate) but the lcore spends ~28% fewer cycles on checksum computation, freeing headroom for other work (ACL lookups — Access Control List packet classification using `rte_acl` — metering, encapsulation).
 
 ---
 

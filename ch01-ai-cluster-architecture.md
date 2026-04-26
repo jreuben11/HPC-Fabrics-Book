@@ -58,9 +58,23 @@ docker info | grep -E "Server Version|Cgroup"
 
 ---
 
+## Introduction
+
+AI compute clusters are, at their core, distributed memory systems in which network bandwidth and latency are as critical to performance as GPU compute throughput. This chapter establishes the architectural vocabulary and first-principles reasoning that every subsequent chapter builds upon. Understanding why the network is a first-class citizen of the AI training stack — not merely a plumbing detail — is the prerequisite for every design decision that follows.
+
+We begin with the physical topology choices that practitioners face when building GPU clusters, from the classical fat-tree/Clos fabric to the rail-optimized variants now standard in production hyperscale deployments. These choices determine bisection bandwidth, ECMP hash collision risk, and the physical routing of collective traffic. Getting topology wrong at design time is expensive to correct; getting it right means the network becomes invisible during training, which is exactly what it should be.
+
+The chapter then maps the three dominant parallelism strategies — data parallelism, pipeline parallelism, and tensor parallelism — to their distinct traffic signatures. Each parallelism type imposes different bandwidth, latency, and flow-count requirements on the fabric. A data-parallel AllReduce is an all-to-all barrier; pipeline parallelism is point-to-point and latency-dominated; tensor parallelism demands ultra-low latency within a small group, typically served by NVLink within a node. Designing a single fabric to serve all three simultaneously is the central engineering challenge of the AI cluster network.
+
+We close with a quantitative bandwidth and latency reference table spanning NVLink through cross-fabric paths, and a layer-by-layer map of the full stack covered by this book. The lab walkthrough provisions a minimal two-spine, two-leaf fat-tree stub using Containerlab and SR Linux, then demonstrates ECMP path distribution using iperf3 — giving concrete, hands-on grounding for the topological concepts in the chapter.
+
+Adjacent chapters build directly on this foundation: Chapter 2 dives into the RDMA transport layer that carries collective traffic, Chapter 3 addresses clock synchronization across cluster nodes, and Chapter 4 covers the UCX/LibFabric abstraction libraries that sit between collective runtimes and the physical transport.
+
+---
+
 ## 1.1 Why the Network Is the Bottleneck
 
-A modern GPU training cluster is, at its core, a distributed memory system. Each GPU has fast local HBM, but no single GPU holds the full model. Training requires frequent synchronization — parameter gradients must be aggregated across every rank after each backward pass. At scale, a 1000-GPU job running AllReduce over a 70B-parameter model moves hundreds of gigabytes of gradient data per step. If the network cannot sustain that bandwidth at low latency, GPUs stall waiting for data. Compute utilization collapses.
+A modern GPU training cluster is, at its core, a distributed memory system. Each GPU has fast local HBM (High Bandwidth Memory, the on-package DRAM stack on modern accelerators), but no single GPU holds the full model. Training requires frequent synchronization — parameter gradients must be aggregated across every rank after each backward pass. At scale, a 1000-GPU job running AllReduce (a collective operation that sums tensors across all participating GPUs and distributes the result back to each) over a 70B-parameter model moves hundreds of gigabytes of gradient data per step. If the network cannot sustain that bandwidth at low latency, GPUs stall waiting for data. Compute utilization collapses.
 
 The implication: the network is not infrastructure that passively moves bits. It is a first-class component of the training system, and its topology, bandwidth profile, congestion behavior, and latency tail all directly determine model throughput.
 
@@ -132,7 +146,7 @@ In **Pipeline Parallel** training, different layers of the model reside on diffe
 - **Frequency:** High (every microbatch boundary)
 - **Latency sensitivity:** High — pipeline bubbles directly reduce GPU utilization
 
-Pipeline traffic is typically within a node (NVLink) or between adjacent nodes. It demands low *latency* more than raw bandwidth.
+Pipeline traffic is typically within a node (NVLink, NVIDIA's proprietary high-bandwidth GPU-to-GPU interconnect with up to 900 GB/s aggregate bandwidth on H100 systems) or between adjacent nodes. It demands low *latency* more than raw bandwidth.
 
 ### 1.3.3 Tensor Parallelism
 
@@ -157,11 +171,11 @@ Both are storage-fabric concerns (Chapter 18) but their bandwidth demands must b
 
 Fat-tree fabrics use **Equal-Cost Multi-Path (ECMP)** routing to spread traffic across parallel paths. ECMP hashes each flow (typically on 5-tuple: src IP, dst IP, proto, src port, dst port) to one of N uplinks.
 
-The problem for AI traffic: NCCL collective operations use a small number of long-lived flows between the same pairs of endpoints. With only 8 GPU flows from a server, ECMP hashing easily produces collisions — multiple flows hash to the same uplink, leaving others idle.
+The problem for AI traffic: NCCL (NVIDIA Collective Communications Library, the dominant GPU collective runtime) collective operations use a small number of long-lived flows between the same pairs of endpoints. With only 8 GPU flows from a server, ECMP hashing easily produces collisions — multiple flows hash to the same uplink, leaving others idle.
 
 **Mitigations:**
 - **ECMP with flowlet switching**: re-hash after a burst gap, spreading elephant flows across paths dynamically
-- **Per-packet load balancing (DLRS)**: hash each *packet* rather than each *flow*; requires reorder tolerance at the receiver (RoCEv2 is not reorder-tolerant — this only applies to TCP flows)
+- **Per-packet load balancing (DLRS, Dynamic Load-balancing with Resequencing)**: hash each *packet* rather than each *flow*; requires reorder tolerance at the receiver (RoCEv2 is not reorder-tolerant — this only applies to TCP flows)
 - **Rail-optimized topology** (Section 1.2.2): eliminate the collision problem by ensuring each GPU's flows land on a dedicated set of uplinks
 - **NCCL topology files**: allow NCCL to express which GPU pairs communicate, enabling deterministic NIC selection
 
@@ -216,7 +230,7 @@ The remainder of this book addresses each layer of the following stack:
 
 ## Lab Walkthrough 1 — Containerlab 2-Spine/2-Leaf ECMP Topology
 
-This walkthrough stands up a minimal fat-tree stub (2 spine switches, 2 leaf switches, 4 iperf3 host containers) using Containerlab with SR Linux nodes, then demonstrates ECMP path distribution.
+This walkthrough stands up a minimal fat-tree stub (2 spine switches, 2 leaf switches, 4 iperf3 host containers) using Containerlab (a container-based network topology emulator that provisions virtual switches and links inside Docker) with SR Linux nodes (Nokia's open, containerized network operating system), then demonstrates ECMP path distribution. iperf3 is a widely used network throughput testing tool that measures achievable bandwidth between a client and server.
 
 **Prerequisites:** Docker running, Containerlab installed, SR Linux image pulled (all covered in the Installation section above).
 

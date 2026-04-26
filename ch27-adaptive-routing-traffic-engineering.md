@@ -81,6 +81,18 @@ python -c "from scapy.all import IP, UDP, send; print('scapy OK')"
 
 ---
 
+## Introduction
+
+AI cluster fabrics are built for one workload above all others: distributed training. In that workload, hundreds of GPU nodes exchange gradient tensors in tight synchronization loops, and the fabric must deliver bandwidth uniformly to every node or the entire training step slows to the pace of the worst link. This chapter explains why the default path-selection algorithm — ECMP — fails for that workload, and how to replace or augment it with adaptive techniques that restore balance.
+
+Equal-Cost Multi-Path (ECMP) was designed for environments where flows are many, short, and statistically independent. AllReduce traffic is the opposite: flows are few, large, and perfectly correlated by NCCL's ring topology. When a small set of long-lived flows must be distributed across a small number of equal-cost spines, hash collisions are not an edge case — they are the dominant outcome. Section 27.1 quantifies this failure mode, showing how a two-spine fabric with four GPU flows can load one spine at 3x the rate of the other.
+
+The adaptive routing techniques in this chapter span hardware, software, and protocol layers. Flowlet switching (§27.2) exploits the burst structure of RDMA traffic to safely reroute flows between ACK gaps, requiring no hardware changes and yielding imbalance ratios below 1.1x. NVIDIA's Adaptive Routing (§27.3) goes further, performing per-packet path selection in Spectrum-3/4 switch silicon based on real-time egress queue depth. Packet spraying (§27.4) is the most aggressive approach, routing each packet to an independently chosen path, and it demands receiver-side out-of-order handling and careful DCQCN congestion tracking.
+
+For environments that need explicit, policy-driven traffic engineering, Section 27.5 introduces SRv6 — Segment Routing over IPv6 — which embeds a full forwarding path in the IPv6 extension header, enabling deterministic steering of training flows across chosen links. Section 27.6 covers UCMP with the BGP Link Bandwidth extended community (RFC 7311), which proportionally weights forwarding across links of unequal capacity — essential during fabric upgrades or partial failures. Section 27.7 and the lab walkthrough provide the measurement tools to quantify imbalance before and after these interventions.
+
+This chapter builds directly on the BGP fabric architecture introduced in Chapter 8 (Open NOS) and the RoCEv2 congestion control model from Chapter 2. The SRv6 section connects to Chapter 30 (IPv6 in datacenter fabrics), and the FRR configurations used throughout the lab extend the routing protocol foundation from Chapter 17 (BGP tooling). Chapter 28 (Fault Tolerance and Resilience) picks up where this chapter leaves off, addressing what happens when adaptive routing is not enough and a link or switch actually fails mid-training.
+
 ## 27.1 ECMP Limitations: Why Static Hashing Fails for AllReduce
 
 Equal-Cost Multi-Path (ECMP) is the universal multi-path forwarding mechanism in data-center fabrics. When a switch has multiple equal-cost paths to a destination, it selects one using a hash of the packet's 5-tuple (source IP, destination IP, source port, destination port, IP protocol). The same 5-tuple always hashes to the same output port — this is the foundational property that keeps TCP flows in-order.
@@ -286,6 +298,8 @@ Example SID: 2001:db8:0100::/48 (locator)
 
 ### FRR SRv6 Configuration
 
+FRR (Free Range Routing) is an open-source IP routing suite for Linux that implements BGP, OSPF, IS-IS, SRv6, and other protocols as a collection of daemons managed by a unified configuration plane. `vtysh` is FRR's interactive CLI shell that provides a Cisco-IOS-style command interface for configuring and inspecting all FRR daemons simultaneously.
+
 ```
 ! FRR vtysh configuration for SRv6 on a spine router
 !
@@ -478,6 +492,8 @@ done
 ## Lab Walkthrough 27 — ECMP Hash Collision Detection and Flowlet Switching
 
 This lab quantifies ECMP imbalance, demonstrates hash collision using Scapy, visualizes the distribution of flows across spines, and shows how flowlet switching restores balance. The topology is a 2-spine / 2-leaf Clos fabric emulated with Containerlab and FRR.
+
+Containerlab is a network topology emulation framework that instantiates routers, switches, and hosts as Docker containers connected by virtual Ethernet links defined in a YAML topology file; it supports FRR, SONiC, SR Linux, and other network OS images. Scapy is a Python packet-crafting library that allows programs to construct, send, receive, and decode arbitrary network packets at any protocol layer, making it ideal for controlled traffic experiments like the 5-tuple sweep in this lab.
 
 **Prerequisite check:**
 

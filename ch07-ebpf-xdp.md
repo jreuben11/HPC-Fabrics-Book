@@ -36,7 +36,7 @@ uname -r                 # confirm kernel ≥ 5.15 (Ubuntu 24.04 ships 6.8)
 
 ### Python scripting environment (uv)
 
-Install `uv` if you want to run the companion Python scripts that parse map output or drive test traffic:
+Install `uv` if you want to run the companion Python scripts that parse map output or drive test traffic. `pyroute2` is a Python netlink library for managing routes, interfaces, and TC rules programmatically; `scapy` is a packet manipulation library for crafting, sending, and parsing arbitrary network packets at the protocol level:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -92,14 +92,28 @@ make -j$(nproc)
 
 ---
 
+## Introduction
+
+The Linux kernel processes every packet traversing a host's network stack through a series of abstractions — socket buffers, netfilter hooks, the routing table — that were designed for generality, not for the line-rate demands of AI cluster networking. eBPF (extended Berkeley Packet Filter) and XDP (eXpress Data Path) break this constraint by embedding a safe, JIT-compiled virtual machine directly inside the kernel, allowing custom programs to intercept, inspect, modify, or drop packets at the earliest possible moment: inside the NIC driver itself.
+
+For AI cluster operators, eBPF provides capabilities that were previously accessible only through kernel modules or dedicated DPDK processes: wire-rate packet filtering, zero-copy delivery to user space via AF_XDP, and low-overhead tracing of any kernel or user-space function without modifying source code. These properties are directly useful for monitoring NCCL collective communication flows, debugging RDMA latency anomalies, enforcing network policy in Kubernetes (via Cilium, covered in Chapter 12), and protecting management interfaces from external traffic at driver speed.
+
+This chapter teaches the eBPF programming model from first principles: the BPF virtual machine instruction set, the verifier's safety guarantees, the map types used for state and communication, and the libbpf CO-RE toolchain that makes programs portable across kernel versions. XDP attachment modes, the AF_XDP zero-copy socket interface, and the TC (Traffic Control) hook are each explained with working code. The chapter concludes with the Katran case study — Meta's production XDP load balancer — which shows what is achievable at hyperscale.
+
+The lab walkthrough builds a complete XDP pipeline from scratch: a per-protocol packet counter, then a dynamic IP blocklist with drop-at-driver-speed capability. Every step is verified with `bpftool`, which serves as the primary debugger for BPF state throughout the chapter.
+
+This chapter connects backward to Chapter 5 (DPDK) — both technologies pursue kernel-bypass performance, but XDP/AF_XDP achieves it while remaining within the kernel's NIC driver model. It connects forward to Chapter 12 (Cilium) and Chapter 13 (Multus/SR-IOV), where eBPF and TC programs form the programmable data plane of Kubernetes-based AI clusters.
+
+---
+
 ## 7.1 The eBPF Revolution
 
 eBPF (extended Berkeley Packet Filter) is a virtual machine embedded in the Linux kernel that allows user-supplied programs to run safely in kernel context — without writing a kernel module. Originally for packet filtering, eBPF now spans tracing, security, and networking. It is arguably the most consequential addition to the Linux kernel in the last decade.
 
 For AI cluster networking, eBPF matters at three levels:
-1. **XDP:** packet processing at the NIC driver level, before the kernel stack — DPDK-class throughput while staying in the kernel
+1. **XDP:** packet processing at the NIC driver level, before `sk_buff` allocation (`sk_buff` is the kernel's primary packet descriptor structure; allocating one per received packet is a significant source of per-packet overhead) — DPDK-class throughput while staying in the kernel
 2. **TC (Traffic Control):** L3/L4 policy enforcement in the kernel fast path — the engine behind Cilium's network policy (Chapter 12)
-3. **Tracing:** low-overhead instrumentation of any kernel or user-space function — used for NCCL performance analysis, RDMA debugging, and storage latency profiling
+3. **Tracing:** low-overhead instrumentation of any kernel or user-space function — used for NCCL (NVIDIA Collective Communications Library, the runtime that orchestrates AllReduce and other collective operations across GPUs) performance analysis, RDMA debugging, and storage latency profiling
 
 ---
 
@@ -117,7 +131,7 @@ The **verifier** statically checks every program before loading:
 - No uninitialized reads
 - No unbounded execution time (loop unrolling or bounded loops required)
 
-This is what makes eBPF safe to run in kernel context without full kernel privileges.
+This is what makes eBPF safe to run in kernel context without full kernel privileges. After verification, the kernel's BPF JIT (Just-In-Time) compiler translates BPF bytecode into native machine code for the host CPU architecture, delivering performance comparable to compiled C kernel code.
 
 ---
 
@@ -269,6 +283,8 @@ User-space UMEM (huge-page backed shared ring)
 Application (reads packets directly from ring)
 ```
 
+UMEM is a contiguous region of user-space memory, typically backed by huge pages, that is registered with the kernel and shared between the NIC's DMA engine and the application. The NIC writes received packets directly into UMEM buffers; the application reads them without any kernel-to-user copy. An XSK (XDP Socket) is the AF_XDP socket type that connects the XDP program running in kernel space to this user-space UMEM region.
+
 ```c
 // User space: create XSK socket
 struct xsk_socket_config cfg = {
@@ -297,7 +313,7 @@ AF_XDP is used by Cilium for its XDP-accelerated load balancer path and by DPDK 
 
 ## 7.7 TC Hook — Traffic Control eBPF
 
-The TC (Traffic Control) hook runs after `sk_buff` allocation, providing access to the full packet including metadata not available at XDP. TC programs are attached to ingress and egress qdiscs:
+The TC (Traffic Control) hook runs after `sk_buff` allocation, providing access to the full packet including metadata not available at XDP. TC programs are attached to ingress and egress qdiscs. A qdisc (queuing discipline) is the kernel abstraction that controls how packets are queued and scheduled on a network interface; `clsact` is a special pseudo-qdisc that provides ingress and egress classifier attachment points for eBPF programs without introducing actual queuing:
 
 ```bash
 # Attach TC eBPF program to ingress
@@ -350,7 +366,7 @@ Katran is Meta's production L4 load balancer, built on XDP and used at massive s
 
 - **Sub-microsecond packet forwarding** at line rate on commodity Mellanox NICs
 - **Consistent hashing** for connection affinity, implemented entirely in BPF maps
-- **IPIP encapsulation** to forward packets to real servers — implemented in XDP with direct packet rewrite
+- **IPIP encapsulation** (IP-in-IP: wrapping the original packet in an outer IP header addressed to the real server, a common load-balancer forwarding technique that avoids the need to modify the original destination IP) to forward packets to real servers — implemented in XDP with direct packet rewrite
 - **No separate hardware load balancer** — runs on standard servers
 
 Key design: the XDP program does a hash lookup of the destination VIP in a BPF map, selects a real server, rewrites the outer IP header, and redirects via `XDP_TX`. No kernel TCP/IP involvement.

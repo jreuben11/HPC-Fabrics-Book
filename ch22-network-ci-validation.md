@@ -69,6 +69,20 @@ docker logs batfish --tail 20
 
 ---
 
+## Introduction
+
+Chapter 22 applies the disciplines of software engineering — static analysis, golden-state diffing, and automated CI pipelines — to network configuration management. By the end of this chapter you will have a working pipeline that runs Batfish intent checks on every pull request, spins up a Containerlab topology, connects to devices with pyATS, and fails the build if the live BGP state deviates from a captured golden snapshot.
+
+The need is direct and measurable. Production AI cluster incidents are disproportionately caused not by hardware failure but by configuration drift — a BGP policy that silently drops prefixes, an ACL that blocks RDMA port 4791, or a VLAN misconfiguration that breaks PFC on one ToR switch. By the time monitoring catches these failures, a training job has already stalled and the GPU hours are gone. The answer is to catch such bugs before they reach production, using the same merge-gate workflow that application teams have used for years.
+
+Chapter 21 introduced Containerlab as the environment in which network topologies can be deployed reproducibly. Chapter 22 builds the validation layer on top: static analysis with Batfish for the pre-flight check, structured state capture with pyATS/Genie for the golden diff, and inventory-driven automation with Nornir for mass device operations. Chapter 23 covers simulation for the cases that require deeper fidelity than emulation can provide.
+
+Each tool occupies a distinct position in the CI pipeline. Batfish operates entirely from config files — no devices, no network — and catches routing and reachability bugs at the same speed as a Python unit test. pyATS and Genie connect to live or emulated devices and parse structured output from `show` commands, enabling regression testing against captured golden state. Nornir provides the glue: a Python-native, parallelism-aware automation framework for tasks that must touch every device in the inventory simultaneously.
+
+Section 22.1 frames the software-engineering case for treating network configuration as code. Sections 22.2–22.4 cover the three toolchains in depth. Section 22.5 wires them into a single GitHub Actions workflow. The Lab Walkthrough executes all three tools end-to-end against the GPU rail fabric from Chapter 21, with expected output at every step.
+
+---
+
 ## 22.1 Treating Network Config as Code
 
 Application developers have practiced test-driven development, code review, and CI/CD pipelines for decades. Network engineers are in 2010 by comparison: configuration changes applied manually by SSH, tested by pinging from one device, and rolled back by typing the inverse command if something breaks.
@@ -259,6 +273,8 @@ with open("golden/spine1_bgp_summary.json", "w") as f:
 
 ### 22.3.3 Golden Diff Test
 
+DeepDiff is a Python library for comparing arbitrarily nested Python objects (dicts, lists, sets) and returning a structured description of every addition, deletion, and value change. In a network context it is used to diff the current parsed device state against a stored golden snapshot, exposing only semantically meaningful changes rather than raw string differences.
+
 ```python
 # test_golden.py
 import json
@@ -357,6 +373,8 @@ spine_result = spines.run(
 ```
 
 ### 22.4.3 Config Rendering and Push
+
+Jinja2 is a Python templating engine that fills placeholder variables (written as `{{ variable }}`) in a text template with values supplied at render time; the `nornir-jinja2` plugin integrates it directly into Nornir tasks so that per-device configuration can be generated from a shared template and host-specific inventory data.
 
 ```python
 from nornir_jinja2.plugins.tasks import template_file

@@ -103,6 +103,20 @@ python -c "import hvac; print('hvac OK')"
 
 ---
 
+## Introduction
+
+AI cluster fabrics are not conventional enterprise networks, and they cannot be secured using conventional enterprise security assumptions. The same architectural properties that make these fabrics fast — RDMA bypass of the kernel, lossless PFC-controlled switching, flat high-bandwidth VLANs shared across hundreds of GPU nodes — also make them structurally hostile to perimeter-based security models. A perimeter model assumes that everything inside the network boundary is trusted. In a shared multi-tenant GPU cluster, that assumption is wrong the moment it is made.
+
+This chapter builds a complete zero-trust security model for AI cluster fabrics, working from first principles. Zero trust means that every network communication must be authenticated and authorized regardless of where it originates — whether from inside the same rack, the same Kubernetes namespace, or across a WireGuard-encrypted overlay. Identity is anchored in cryptographic keys and SPIFFE URIs, not in IP addresses that change with every pod restart or ECMP reroute.
+
+The chapter begins with a realistic threat model (§26.1) that identifies the attack vectors unique to GPU clusters: RDMA-level eavesdropping and injection, NIC firmware exploitation via out-of-band management interfaces, and management-plane credential leakage through training job artifacts. These are not theoretical — each has occurred in production environments. Understanding the threat model is a prerequisite for understanding why the defenses are designed the way they are.
+
+From there the chapter covers the full zero-trust stack (§26.2–26.8): Cilium transparent encryption for automatic node-to-node WireGuard or IPsec coverage with zero application changes; manual WireGuard configuration to understand the underlying Curve25519/ChaCha20-Poly1305 cryptographic primitives; strongSwan IKEv2 with certificate-based mutual authentication for compliance environments requiring standards-track IPsec; SPIFFE/SPIRE for portable workload identity that survives topology changes; HashiCorp Vault for dynamic, short-lived PKI credentials; and Cilium `CiliumNetworkPolicy` for identity-based network segmentation enforced at the eBPF layer.
+
+This chapter connects directly to Chapter 12 (Cilium eBPF architecture), Chapter 15 (gNMI telemetry for detecting management-plane anomalies), and Chapter 13 (SR-IOV and RDMA device plugin, which determines what NIC resources are exposed to pods). The lab walkthrough ties the primitives together into a working encrypted overlay, with tcpdump verification that no plaintext traverses the underlay fabric.
+
+---
+
 ## 26.1 Threat Model for AI Cluster Fabrics
 
 AI GPU clusters present a threat surface that differs qualitatively from traditional enterprise environments. The combination of ultra-high-bandwidth RDMA fabrics, shared multi-tenant scheduling, and the enormous value of trained model weights creates specific attack vectors that conventional perimeter security cannot address.
@@ -677,6 +691,8 @@ vault write pki/issue/nic-management \
 ```
 
 ### Vault Python Client (hvac)
+
+`hvac` is the official HashiCorp Vault Python client library, providing a Pythonic interface to Vault's HTTP API for secrets management, PKI operations, and dynamic credential issuance.
 
 ```python
 # vault_nic_creds.py — issue and rotate NIC management certificates

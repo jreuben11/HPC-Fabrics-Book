@@ -34,6 +34,20 @@ python -c "import torch; print(torch.__version__); print(torch.distributed.is_av
 
 ---
 
+## Introduction
+
+Distributed training frameworks are the software layer that partitions a large model training job across tens, hundreds, or thousands of GPUs. From the application developer's perspective, these frameworks — PyTorch Distributed, DeepSpeed, Megatron-LM, Horovod, Ray Train — abstract away the complexity of gradient synchronization, model sharding, and inter-node communication. From the network engineer's perspective, they are traffic generators whose output the fabric must sustain at near-line rate, and whose communication patterns determine whether a given fabric topology is the right choice for a given training workload.
+
+The central challenge is that different parallelism strategies produce fundamentally different traffic patterns. Data parallelism (DDP, FSDP) produces all-to-all AllReduce bursts at every optimizer step — a pattern that rail-optimized fat-tree topologies are designed to absorb efficiently. Pipeline parallelism produces ordered, point-to-point traffic between adjacent model stages — a pattern where cross-rack latency becomes the dominant performance variable. Tensor parallelism produces extremely latency-sensitive AllReduce operations within a small group of GPUs — a pattern so demanding that it is almost always confined to NVLink within a single node. Each pattern implies different requirements for bandwidth, latency, loss sensitivity, and topology.
+
+Understanding these patterns is not merely academic: it determines which GPU server models to purchase, how many tiers of switching are needed, whether InfiniBand or RoCEv2 is cost-effective for a given workload, whether RDMA QP setup overhead matters, and how to configure QoS priority classes so that the right traffic gets the right service. The network engineer who understands parallelism strategies can participate meaningfully in capacity planning, can diagnose training slowdowns by recognizing their network signatures, and can size the storage and training fabrics independently to prevent cross-contamination.
+
+This chapter covers the traffic profiles of DDP, FSDP, pipeline parallelism, tensor parallelism, DeepSpeed ZeRO stages, and Ray — providing quantitative estimates of message sizes, frequencies, and directional patterns for each. A lab walkthrough then makes these abstractions concrete: two PyTorch ranks running on a single CPU machine capture the rendezvous handshake and AllReduce data-plane traffic with tcpdump, measure how AllReduce time scales with tensor size, and establish the baseline numbers that make the case for investing in a high-performance training fabric.
+
+This chapter builds directly on Chapter 19 (NCCL and collective communications), which covers the transport layer that executes these patterns, and connects forward to Chapter 29 (Kubernetes AI scheduling), which determines how these parallel workloads are placed on the fabric. Chapter 18 (distributed storage) addresses the checkpoint write traffic that must not compete with the AllReduce traffic analyzed here.
+
+---
+
 ## 20.1 The Network Engineer's View of Training Runtimes
 
 From the fabric's perspective, a distributed training runtime is a traffic generator. The questions that matter are:
@@ -69,7 +83,7 @@ FSDP shards both model parameters and optimizer state across ranks, reducing per
 - **Pattern:** AllGather (before forward) + ReduceScatter (after backward) — functionally equivalent to AllReduce but with intermediate sharding
 - **Message size:** Per-layer, not full model — smaller individual transfers but more frequent
 - **Overlap:** FSDP can prefetch the next layer's parameters while the current layer computes
-- **Fabric implication:** Higher message frequency, smaller average message size than DDP. Transport efficiency is important for small messages — RDMA with low QP setup overhead preferred.
+- **Fabric implication:** Higher message frequency, smaller average message size than DDP. Transport efficiency is important for small messages — RDMA with low QP (Queue Pair) setup overhead preferred. A QP is the fundamental RDMA communication endpoint: a pair of send and receive queues that must be connected and transitioned to the Ready-to-Receive state before data transfer begins; QP setup adds latency that is significant when individual message sizes are small relative to setup cost.
 
 ---
 
@@ -118,7 +132,7 @@ DeepSpeed's ZeRO (Zero Redundancy Optimizer) partitions model state across ranks
 - Very high message count (one AllGather + ReduceScatter per layer per step)
 - Individual messages smaller but total volume ≈ DDP
 
-**Fabric implication:** ZeRO-3's fine-grained communication makes it more sensitive to message rate (RDMA QP setup overhead, ACK latency) than to raw bandwidth. DC QP mode or UCX's DC transport (Chapter 4) is important for ZeRO-3 at scale.
+**Fabric implication:** ZeRO-3's fine-grained communication makes it more sensitive to message rate (RDMA QP setup overhead, ACK latency) than to raw bandwidth. DC (Dynamically Connected) QP mode is an InfiniBand transport type that shares a single QP across many remote destinations, dramatically reducing the number of QPs required at scale compared to Reliable Connected (RC) mode — critical when ZeRO-3 is communicating with hundreds of peers simultaneously. UCX's DC transport (Chapter 4) provides the same benefit over RoCEv2. DC QP mode or UCX's DC transport (Chapter 4) is important for ZeRO-3 at scale.
 
 ---
 
@@ -128,7 +142,7 @@ Ray is not primarily a training framework but a general distributed computing fr
 
 **Ray's network traffic patterns:**
 
-1. **Object store transfers:** Large tensors (model weights, batches) are stored in Ray's distributed object store (Plasma, backed by shared memory or Apache Arrow). When an object on node A is needed by a task on node B, Ray transfers it via its own object transfer protocol (not RDMA, not NCCL).
+1. **Object store transfers:** Large tensors (model weights, batches) are stored in Ray's distributed object store (Plasma, backed by shared memory or Apache Arrow). Plasma is Ray's in-memory object store that uses shared memory to allow zero-copy reads by multiple processes on the same node; Apache Arrow is the columnar in-memory data format that Plasma uses to serialize tensors and dataframes efficiently. When an object on node A is needed by a task on node B, Ray transfers it via its own object transfer protocol (not RDMA, not NCCL).
    - Protocol: TCP/gRPC on a dynamic port
    - Fabric implication: Object transfers use the management network; for large models this can saturate a 25GbE management link
 
@@ -143,7 +157,7 @@ Ray is not primarily a training framework but a general distributed computing fr
 
 ## 20.7 Ports and Firewall Considerations
 
-A complete port table for training fabric ACLs:
+A complete port table for training fabric ACLs (Access Control Lists — firewall rules that permit or deny traffic based on source/destination IP, port, and protocol, used here to define what traffic the training fabric must allow):
 
 | Service | Protocol | Ports | Notes |
 |---|---|---|---|
@@ -160,7 +174,7 @@ A complete port table for training fabric ACLs:
 
 ## Lab Walkthrough 20 — Traffic Pattern Analysis with tcpdump and PyTorch Distributed
 
-This walkthrough runs two PyTorch distributed ranks on a single CPU machine using the gloo backend. You will capture the rendezvous handshake and AllReduce traffic on the loopback interface, analyze it with tshark, and measure how AllReduce time scales with tensor size.
+This walkthrough runs two PyTorch distributed ranks on a single CPU machine using the gloo backend. `gloo` is Facebook's collective communications library that implements AllReduce, AllGather, and barrier over TCP sockets — it works on CPUs without CUDA or RDMA hardware, making it ideal for development and testing. `torchrun` is PyTorch's built-in process launcher that spawns the specified number of worker processes, assigns each a RANK and WORLD_SIZE environment variable, and establishes the rendezvous over the specified master address and port. You will capture the rendezvous handshake and AllReduce traffic on the loopback interface, analyze it with tshark, and measure how AllReduce time scales with tensor size.
 
 ### Step 1: Write the two-rank AllReduce script
 
@@ -291,6 +305,8 @@ N packets received by filter
 ```
 
 ### Step 4: Analyze the capture with tshark
+
+`tshark` is the command-line version of Wireshark — a full network protocol analyzer that reads pcap capture files and can dissect, filter, and extract fields from any protocol it recognizes. It supports the same display filter syntax as Wireshark, making it the standard tool for scripted packet analysis.
 
 Inspect the rendezvous handshake on port 29400:
 

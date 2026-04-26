@@ -8,6 +8,8 @@
 
 ### p4c Compiler
 
+`p4c` is the open-source reference compiler for the P4 language, maintained by the P4 Language Consortium. It translates P4 programs into target-specific artifacts: JSON configuration files for bmv2, or ASIC-specific intermediate representations for hardware targets.
+
 ```bash
 # p4c compiler (Ubuntu 24.04 — available in the p4lang PPA)
 sudo apt install -y p4lang-p4c
@@ -18,6 +20,8 @@ p4c --version
 ```
 
 ### bmv2 Behavioral Model
+
+`bmv2` (Behavioral Model version 2) is a software implementation of a P4-programmable switch that runs as a Linux process. It is the standard reference target for developing and testing P4 programs before deploying to hardware, and supports both the V1Model and PSA P4 architectures.
 
 ```bash
 # bmv2 software P4 switch
@@ -51,6 +55,20 @@ python3 -c "from scapy.all import Ether; print('Scapy OK')"
 
 ---
 
+## Introduction
+
+Every switch deployed before the mid-2010s implemented a forwarding pipeline that was cast in silicon at fabrication time: parse Ethernet, look up the MAC table, look up the IP FIB, apply access control lists, forward. Vendors could configure the tables, but the pipeline itself was immutable. This rigidity created a fundamental mismatch with the demands of AI cluster networking, where custom telemetry schemes, novel congestion signals, and in-network computation are not optional enhancements but architectural requirements.
+
+P4 (Programming Protocol-Independent Packet Processors) dissolves this constraint. A P4 program defines the complete forwarding behavior — which headers to parse, which match-action tables to apply in which order, how to reconstruct the packet for transmission — and is compiled to a target: a software switch for testing, an FPGA for prototyping, or a programmable ASIC (such as Intel Tofino) for production. This chapter covers the full P4 toolchain: the P4₁₆ language itself, the bmv2 behavioral model for software simulation, the P4Runtime gRPC control-plane API, and two high-impact applications — in-network AllReduce aggregation and INT (In-band Network Telemetry) — that are only possible with a programmable data plane.
+
+The chapter begins with OpenFlow, the predecessor technology that established the match-action abstraction and the software-defined networking (SDN) paradigm. Understanding OpenFlow's capabilities and limitations motivates every design decision in P4. OpenFlow's implementation in Open vSwitch (OVS) and the Ryu controller framework is demonstrated with a working L2 learning switch, before OpenFlow's fundamental limitations — fixed pipeline stages, no stateful computation, no custom header parsing — are analyzed in detail.
+
+The reader will learn to write a complete P4₁₆ program, compile it with `p4c`, instantiate it on `bmv2`, populate its match-action tables via a Python P4Runtime controller, and verify end-to-end packet forwarding using `scapy`. The lab does not require programmable ASIC hardware — bmv2 runs on any Linux host.
+
+This chapter connects backward to Chapter 8 (Open NOSes), which showed how SONiC and SR Linux program fixed-function ASICs via SAI, and forward to Chapter 10 (SmartNIC/DPU), where P4 programs execute on NIC ASICs at the host edge. The INT telemetry scheme developed here feeds directly into the observability pipeline covered in Chapter 16.
+
+---
+
 ## 9.1 Beyond Fixed-Function Forwarding
 
 Every switch ASIC shipped before ~2014 implemented a fixed forwarding pipeline: parse Ethernet → look up MAC table → look up IP FIB → apply ACL → forward. Vendors could expose configuration knobs, but the fundamental pipeline was immutable.
@@ -58,8 +76,8 @@ Every switch ASIC shipped before ~2014 implemented a fixed forwarding pipeline: 
 P4 (Programming Protocol-Independent Packet Processors) inverts this. A P4 program defines the parser, the match-action tables, and the deparser — the complete forwarding behavior — and is compiled to a specific target (software switch, FPGA, or programmable ASIC). The switch does what the program says, not what the chip vendor hardcoded.
 
 For AI cluster networking, P4 enables:
-- **In-network computing:** implement AllReduce aggregation in the switch ASIC, reducing the number of bytes that must traverse the fabric
-- **Custom telemetry:** INT (In-band Network Telemetry) — embed per-hop latency, queue depth, and utilization into live traffic packets
+- **In-network computing:** implement AllReduce aggregation (AllReduce is the collective communication operation in which each GPU contributes a tensor and receives the element-wise sum across all contributors — the dominant communication pattern in data-parallel distributed training) in the switch ASIC, reducing the number of bytes that must traverse the fabric
+- **Custom telemetry:** INT (In-band Network Telemetry) — embed per-hop latency, queue depth, and utilization metadata directly into live traffic packets as they traverse the fabric, so the receiving host can reconstruct the complete per-hop path profile for every flow
 - **Custom encapsulation:** implement RDMA-aware routing, credit-based flow control, or novel congestion signals without changing the NIC
 
 ---
@@ -110,7 +128,7 @@ Controller                    Switch
 
 ### 9.2.3 OpenFlow with OVS and Ryu
 
-**Open vSwitch** is OpenFlow's primary open-source dataplane. It implements OpenFlow 1.0 through 1.5 and exposes the flow table via `ovs-ofctl`. **Ryu** is a lightweight Python controller framework that connects to OVS over the OpenFlow protocol.
+**Open vSwitch** (OVS) is an open-source, production-quality virtual switch that runs in the Linux kernel or as a DPDK user-space process. It implements OpenFlow 1.0 through 1.5, supports hardware offload to physical NICs, and is the forwarding engine underneath Kubernetes network plugins such as OVN-Kubernetes and OpenStack Neutron. It exposes the flow table via `ovs-ofctl`. **Ryu** is a lightweight Python controller framework that connects to OVS over the OpenFlow protocol.
 
 Install Ryu:
 
@@ -215,7 +233,7 @@ OpenFlow proved the SDN concept but hit fundamental limits that motivated P4:
 
 For production networks, two controllers dominate the enterprise and carrier OpenFlow deployments:
 
-**ONOS** (Open Network Operating System) is the production OpenFlow controller used by AT&T (CORD platform), Comcast, and SK Telecom. It provides a distributed, high-availability controller cluster with a northbound intent API and southbound OpenFlow/P4Runtime/NETCONF adapters.
+**ONOS** (Open Network Operating System) is the production OpenFlow controller used by AT&T (CORD — Central Office Re-architected as a Datacenter — an ONF platform for virtualizing telecom central offices using commodity servers and open-source networking software), Comcast, and SK Telecom. It provides a distributed, high-availability controller cluster with a northbound intent API and southbound OpenFlow/P4Runtime/NETCONF adapters.
 
 ```bash
 # Run ONOS in Docker (single-node for lab use)
@@ -234,7 +252,7 @@ onos> flows        # show all installed flows
 
 **OpenDaylight** (ODL) is a Linux Foundation controller with a broader scope — it supports OpenFlow, NETCONF, BGP, and PCEP from a single platform. It is more commonly used in enterprise and WAN SDN than pure data-center OpenFlow.
 
-**Relevance to AI clusters:** In modern AI cluster fabrics, OpenFlow is primarily encountered via OVN (which generates OpenFlow rules for OVS) and via Cilium's eBPF dataplane (which provides equivalent programmability without a controller channel). For in-network AI computing (AllReduce aggregation, INT telemetry), P4 on ASIC targets is the correct tool — OpenFlow cannot express stateful accumulation.
+**Relevance to AI clusters:** In modern AI cluster fabrics, OpenFlow is primarily encountered via OVN (Open Virtual Network — a logical networking layer built on top of OVS that translates high-level Kubernetes network policies and load-balancing rules into OpenFlow table entries, used by the OVN-Kubernetes CNI plugin) and via Cilium's eBPF dataplane (which provides equivalent programmability without a controller channel). For in-network AI computing (AllReduce aggregation, INT telemetry), P4 on ASIC targets is the correct tool — OpenFlow cannot express stateful accumulation.
 
 ---
 
@@ -458,7 +476,7 @@ The most exciting P4 application for AI clusters is **in-network aggregation**: 
 
 ### SHARP (Scalable Hierarchical Aggregation and Reduction Protocol)
 
-NVIDIA's SHARP implements in-network AllReduce on InfiniBand switches. The concept (implementable in P4 on Tofino):
+SHARP is NVIDIA's in-network computing technology for InfiniBand fabrics that offloads AllReduce collective operations to the switch ASIC. Instead of routing gradient tensors from every GPU through a reduction tree back to every GPU, SHARP-equipped switches perform partial sums on the data as it transits through the fabric, reducing the total bytes transferred across the network by up to a factor of N (the number of ranks). NVIDIA's SHARP implements in-network AllReduce on InfiniBand switches. The concept (implementable in P4 on Tofino):
 
 ```
 Without SHARP:
@@ -1041,6 +1059,8 @@ Port   1:  pkts=      12  bytes=      1008
 ```
 
 ### Step 8 — Craft and Send Packets with Scapy; Verify Forwarding Decisions
+
+Scapy is a Python packet manipulation library that allows construction of arbitrary network packets at each protocol layer, injection onto a live interface, and capture and dissection of responses. It is widely used for network testing, protocol fuzzing, and verifying forwarding behavior in software switches.
 
 Use Scapy to send crafted packets and observe that bmv2 makes the correct forwarding decision. Run from the host (not inside a namespace), injecting directly onto `veth0`:
 

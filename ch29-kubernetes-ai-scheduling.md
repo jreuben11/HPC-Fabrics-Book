@@ -54,6 +54,18 @@ python -c "import kubernetes, yaml; print('OK')"
 
 ---
 
+## Introduction
+
+Kubernetes was built for stateless microservices that can be scheduled independently, spread for availability, and bin-packed by CPU and memory. Distributed AI training jobs violate every one of those assumptions. They require all ranks to be running simultaneously before any can make progress (gang scheduling), they are topology-sensitive to the point where a single rack boundary can add 40% overhead to pipeline-parallel training (topology awareness), and their resource requirements — typically 8 GPUs per pod, hundreds of pods per job — make fragmentation a default state rather than an edge case. This chapter explains what breaks and how to fix it.
+
+The chapter opens with the failure modes (§29.1) and the core concept of gang scheduling (§29.2), establishing the vocabulary of `PodGroup`, `minMember`, starvation, and deadlock. From there it covers three Kubernetes-native scheduling systems: Volcano (§29.3), the dominant production gang scheduler that introduces `Queue`, `PodGroup`, and `Job` CRDs along with DRF-based fairness and preemption; Kueue (§29.4), which acts as an admission controller above the default scheduler, managing quota without replacing it; and Coscheduler (§29.5), which implements gang scheduling as a `kube-scheduler` plugin for environments that want gang guarantees without deploying a separate scheduler binary.
+
+Sections 29.6 and 29.7 move from scheduling policy to physical consequences. Topology-aware scheduling using `topologySpreadConstraints` and NUMA affinity keeps AllReduce traffic within a rack, eliminating spine traversal that can add 3µs per hop to collective latency. The quantitative analysis in §29.7 shows that for high-frequency pipeline-parallel communications with small tensors, cross-rack placement can increase collective overhead by 40–50%. Section 29.8 builds out the operational policy layer: priority classes, preemption order, and multi-team quota management.
+
+Section 29.9 extends beyond pure Kubernetes to the three additional scheduling systems that dominate real AI infrastructure: SLURM for HPC-origin MPI workloads where topology-aware allocation is expressed through `topology.conf` and `--switches`; RunAI for GPU utilization governance with its Projects and Departments quota model; and NVIDIA Dynamo for disaggregated prefill-decode inference serving at scale, where the performance-critical path is the KV cache RDMA transfer between prefill and decode workers.
+
+This chapter connects directly to Chapter 2 (RoCEv2 fabric bandwidth that makes rank placement performance-critical), Chapter 12 (Cilium CNI that provides pod networking within which NCCL operates), Chapter 13 (SR-IOV and the NVIDIA GPU device plugin that exposes GPUs to pods), and Chapter 27 (adaptive routing that determines how cross-rack traffic is handled when topology-constrained placement is not possible).
+
 ## 29.1 Why Standard Kubernetes Scheduling Breaks for AI
 
 The default Kubernetes scheduler (`kube-scheduler`) was designed for stateless microservices: schedule each pod independently, bin-pack by CPU and memory, and spread for availability. This model fails for distributed AI training jobs in three distinct ways.
@@ -206,7 +218,7 @@ Volcano supports multiple scheduling plugins. The two most relevant for AI are:
 
 **Binpack**: Fills nodes as densely as possible, keeping some nodes completely free for large gang jobs. Use for training clusters where you want to preserve large contiguous GPU allocations.
 
-**DRF (Dominant Resource Fairness)**: Allocates resources proportionally to queue weight, preventing any single queue from monopolizing the cluster. Use in multi-tenant training clusters.
+**DRF (Dominant Resource Fairness)**: A multi-resource fair-sharing algorithm that identifies each job's "dominant resource" (the resource — CPU, GPU, memory — that it consumes most relative to cluster capacity) and allocates across jobs to equalize dominant-resource shares, preventing any single queue from monopolizing the cluster. Use in multi-tenant training clusters.
 
 Configure in the Volcano scheduler config:
 
@@ -575,7 +587,7 @@ sbatch --nodes=16 --switches=1 train.sh
 
 **PMIx integration (cross-reference Ch. 4)**
 
-SLURM uses PMIx to bootstrap MPI and collective communication libraries. When `srun` launches a PyTorch DDP job, SLURM sets `RANK`, `WORLD_SIZE`, `MASTER_ADDR`, and `MASTER_PORT` via PMIx; the training script reads them without any cluster-specific code. See §4.3 for the full PMIx wire protocol.
+SLURM uses PMIx (Process Management Interface for Exascale) — a standardized API for bootstrapping and coordinating MPI and collective communication libraries across cluster nodes — to bootstrap MPI and collective communication libraries. When `srun` launches a PyTorch DDP job, SLURM sets `RANK`, `WORLD_SIZE`, `MASTER_ADDR`, and `MASTER_PORT` via PMIx; the training script reads them without any cluster-specific code. See §4.3 for the full PMIx wire protocol.
 
 **Container jobs: Pyxis + Enroot**
 
@@ -665,7 +677,7 @@ runai top node
 
 **GPU sharing features**
 
-RunAI supports sub-GPU allocation via its fractional GPU feature (time-slicing or MIG-backed) and dynamic GPU memory limits, enabling inference and development workloads to share nodes with training jobs without wasting idle GPU cycles.
+RunAI supports sub-GPU allocation via its fractional GPU feature (time-slicing or MIG-backed) and dynamic GPU memory limits, enabling inference and development workloads to share nodes with training jobs without wasting idle GPU cycles. MIG (Multi-Instance GPU) is an NVIDIA A100/H100 hardware feature that partitions a single GPU into up to seven independent GPU instances, each with isolated memory and compute slices, enabling multiple workloads to run on one physical GPU with hard performance isolation.
 
 ```bash
 # Inference workload requesting 0.25 GPU
@@ -710,6 +722,8 @@ dynamo-worker      — vLLM-backed inference worker; registers with router
 KV cache store     — shared distributed KV cache (RDMA or NVLink transfer)
 Planner            — monitors GPU utilization, scales workers, migrates KV blocks
 ```
+
+`vLLM` is a high-throughput LLM inference serving library that implements PagedAttention (efficient KV cache memory management) and continuous batching, making it the dominant open-source inference engine for per-token-optimized GPU serving.
 
 **Deployment on Kubernetes**
 
@@ -759,7 +773,7 @@ spec:
     grove.nvidia.com/kv-peer: "decode-worker-0"
 ```
 
-Grove queries the cluster topology graph (populated via DCGM and network discovery) and ensures that prefill and decode worker pairs are placed to minimize KV transfer latency — on the same NVLink domain if possible, or on the same RDMA rail if cross-node transfer is unavoidable.
+Grove queries the cluster topology graph (populated via DCGM — NVIDIA's Data Center GPU Manager, which exposes per-GPU health metrics, topology, and utilization via a Kubernetes device plugin and Prometheus exporter — and network discovery) and ensures that prefill and decode worker pairs are placed to minimize KV transfer latency — on the same NVLink domain if possible, or on the same RDMA rail if cross-node transfer is unavoidable.
 
 ---
 
@@ -1498,7 +1512,7 @@ For latency-sensitive workloads with small tensors (pipeline parallelism, freque
   Scenario B: ~1.17ms/step × 100,000 = 117s/hr  (+46% overhead)
 ```
 
-The spine traversal penalty is most significant for **high-frequency, small-tensor** collectives (e.g., pipeline-parallel bubble communications) rather than large AllReduce operations. For large LLM training with FSDP and infrequent checkpoints, rack placement has a smaller impact. For dense pipeline-parallel training with many microbatch synchronizations, same-rack placement can reduce collective overhead by up to 46%.
+The spine traversal penalty is most significant for **high-frequency, small-tensor** collectives (e.g., pipeline-parallel bubble communications) rather than large AllReduce operations. For large LLM training with FSDP (Fully Sharded Data Parallel — a PyTorch parallelism strategy that shards model parameters, gradients, and optimizer states across all ranks, reducing per-GPU memory by a factor of world size) and infrequent checkpoints, rack placement has a smaller impact. For dense pipeline-parallel training with many microbatch synchronizations, same-rack placement can reduce collective overhead by up to 46%.
 
 ```bash
 # Quick verification: compare ping RTT within rack vs cross-rack

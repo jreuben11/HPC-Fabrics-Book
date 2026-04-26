@@ -71,6 +71,20 @@ python -c "import boto3; print(boto3.__version__)"
 
 ---
 
+## Introduction
+
+Storage in an AI cluster is not a secondary concern — it is a first-class networking problem. A 1000-GPU training run generates checkpoint writes that, when issued simultaneously from all ranks, constitute an 800 GB burst hitting the storage fabric in seconds. Dataset streaming for the next training epoch begins the moment the previous one ends. Model weights must be loaded into GPU memory before the first forward pass can begin. Each of these workloads has fundamentally different access patterns, latency tolerances, and bandwidth requirements, and a storage architecture that optimizes for one will be suboptimal or actively harmful for the others.
+
+This chapter examines the open-source and commercial storage systems deployed in production AI clusters, analyzing each through the lens of what it demands from the network fabric and how well it serves the three canonical storage workloads: dataset streaming, checkpointing, and model serving. The systems covered span the full spectrum: Ceph provides a unified POSIX/block/object platform on commodity hardware; Lustre delivers HPC-grade parallel throughput optimized for large sequential I/O across thousands of simultaneous clients; DAOS (Distributed Asynchronous Object Storage) eliminates the OS I/O stack entirely using SPDK and Storage Class Memory to achieve sub-100 microsecond checkpoint latency; WEKA (WekaFS) combines DPDK-accelerated networking with direct NVMe access to close the performance gap between Lustre and DAOS without requiring specialized hardware; and MinIO provides the S3-compatible object interface that every ML framework already speaks.
+
+A thread running through all these systems is the relationship between storage and training fabric topology. Checkpoint traffic and gradient AllReduce traffic must not share bandwidth — a simultaneous checkpoint from a thousand GPUs will saturate any shared uplink and stall AllReduce operations in the most performance-critical phase of training. This chapter explains how to design storage network isolation using separate VLANs or physical switching, and how to configure QoS priority classes so that storage traffic yields to gradient traffic when contention occurs.
+
+Readers will learn the architecture of each system, its configuration for AI workloads, the PromQL metrics to watch for storage-induced training stalls, and how to benchmark each tier with fio to establish per-system throughput baselines.
+
+This chapter connects directly to Chapter 6 (SPDK/NVMe-oF, on which DAOS's I/O path is built), Chapter 7 (eBPF/XDP for storage-traffic policing), and Chapter 20 (distributed training fabric demands, which quantifies exactly how much checkpoint bandwidth a given model size requires). Chapter 19 (GPU collective communications) explains the AllReduce patterns that storage traffic must not disrupt.
+
+---
+
 ## 18.1 Storage as a Fabric Concern
 
 Training a large model has three distinct storage demands:
@@ -242,7 +256,9 @@ LNet supports RDMA transfers, making Lustre over InfiniBand capable of full-fabr
 
 ## 18.4 DAOS — Distributed Asynchronous Object Storage
 
-DAOS (Intel/HPE) is purpose-built for NVMe SSDs and Intel Optane (SCM — Storage Class Memory). It eliminates the OS I/O stack entirely, using SPDK to access NVMe directly, achieving sub-100 µs I/O latency — orders of magnitude better than Lustre or Ceph.
+DAOS (Intel/HPE) is purpose-built for NVMe SSDs and Intel Optane (SCM — Storage Class Memory). SCM (Storage Class Memory) refers to byte-addressable, persistent memory devices such as Intel Optane DCPMM or CXL-attached DRAMs that combine DRAM-class latency with the persistence of flash. SPDK (Storage Performance Development Kit) is an Intel open-source framework that drives NVMe devices from user space using DPDK-style polling, bypassing the Linux block layer and kernel I/O scheduler entirely. DAOS eliminates the OS I/O stack by using SPDK to access NVMe directly, achieving sub-100 µs I/O latency — orders of magnitude better than Lustre or Ceph.
+
+CART (Communication and Remote Transactions) is the DAOS network transport library built on UCX and libfabric; it provides reliable, ordered message delivery and RPC semantics over RDMA fabrics without the overhead of a general-purpose messaging layer.
 
 ### 18.4.1 Architecture
 
@@ -318,7 +334,7 @@ Key design choices that differentiate WEKA from Lustre and Ceph:
 | GPUDirect Storage | Via Lustre-GDRCOPY | No | Experimental | Yes (native) |
 | Operational complexity | High | High | Very High | Medium |
 
-WEKA GPUDirect Storage (GDS) integration allows GPU memory to receive data directly from the NVMe drives over the PCIe fabric, bypassing CPU DRAM entirely. For checkpoint restore (loading a 400 GB model into GPU memory), GDS can reduce restore time by 30–50% compared to CPU-mediated reads.
+GPUDirect Storage (GDS) is an NVIDIA technology that establishes a direct DMA path between NVMe storage and GPU memory over the PCIe fabric, removing the CPU and system DRAM from the data path entirely. WEKA's GDS integration allows GPU memory to receive data directly from the NVMe drives over the PCIe fabric, bypassing CPU DRAM entirely. For checkpoint restore (loading a 400 GB model into GPU memory), GDS can reduce restore time by 30–50% compared to CPU-mediated reads.
 
 ### 18.5.3 Client Installation
 
@@ -466,7 +482,7 @@ Key insight: WEKA closes most of the performance gap between Lustre and DAOS wit
 
 ## 18.6 MinIO — S3-Compatible Object Storage
 
-MinIO is the practical on-premises S3 replacement. It is not optimized for HPC I/O patterns but provides the interface that every ML framework already knows:
+MinIO is the practical on-premises S3 replacement. It is not optimized for HPC I/O patterns but provides the interface that every ML framework already knows. `boto3` is the Amazon Web Services SDK for Python, used here as a generic S3 client that works against any S3-compatible endpoint including MinIO. `s3fs` is a Python filesystem interface built on top of boto3 that presents an S3 bucket as a file-like object, enabling libraries such as PyTorch DataLoader to stream objects directly from object storage without downloading them to disk first.
 
 ```bash
 # Single-node (for dev/test)
@@ -503,7 +519,7 @@ GPU training fabric (RDMA / RoCEv2):
   - Dedicated rail-optimized topology
   - DCQCN priority class 3
 
-Storage fabric (RDMA or iSCSI):
+Storage fabric (RDMA or iSCSI):    # iSCSI (Internet Small Computer Systems Interface) encapsulates SCSI block commands over TCP/IP, providing a lower-cost alternative to RDMA for storage fabrics where latency requirements are less stringent
   - Checkpoint writes (periodic large bursts)
   - Dataset streaming (sustained, sequential)
   - Separate VLAN or separate physical switches
@@ -521,7 +537,7 @@ Failure to isolate: a 1000-GPU checkpoint event (1000 × 800 GB/1000 = 800 GB si
 
 ## Lab Walkthrough 18 — Single-Node Ceph (cephadm), RBD Benchmarking with fio, OSD Failure Simulation, and MinIO S3 Operations
 
-This walkthrough uses `cephadm bootstrap --single-host-defaults` to stand up a containerized single-node Ceph cluster entirely on one Linux host (no VMs required), runs fio benchmarks on an RBD block device, simulates an OSD failure, then runs a full MinIO S3 lab and compares I/O performance across three storage tiers.
+This walkthrough uses `cephadm bootstrap --single-host-defaults` to stand up a containerized single-node Ceph cluster entirely on one Linux host (no VMs required), runs fio benchmarks on an RBD block device, simulates an OSD failure, then runs a full MinIO S3 lab and compares I/O performance across three storage tiers. `cephadm` is Ceph's official deployment and day-2 management tool; it bootstraps the entire cluster by pulling Ceph daemon container images and orchestrating them via the host's container runtime (Docker or Podman), eliminating manual daemon installation. `fio` (Flexible I/O Tester) is the standard Linux block-device benchmarking tool; it drives configurable I/O patterns (sequential, random, mixed) against any file or block device using a variety of I/O engines including the Linux asynchronous I/O engine (`libaio`).
 
 **Prerequisites:** Docker or Podman running, at least 16 GB RAM, 100 GB free disk, and `cephadm` installed as shown in the Installation section above.
 

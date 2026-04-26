@@ -35,10 +35,24 @@ uv pip install kubernetes pyyaml
 
 ---
 
+## Introduction
+
+GPU training pods have a networking problem that standard Kubernetes cannot solve out of the box: they need two fundamentally different network interfaces simultaneously. The first is a conventional container network interface for Kubernetes control plane traffic — DNS lookups, service discovery, health checks, and monitoring. The second is a high-performance RDMA interface directly attached to a physical NIC's Virtual Function, providing the near-zero-overhead data path that NCCL collective operations require for gradient synchronization. Standard Kubernetes assigns exactly one network interface per pod, and that interface belongs to the primary CNI plugin.
+
+Multus CNI (Container Network Interface) solves this by acting as a meta-plugin: it delegates to other CNI plugins in sequence, attaching multiple interfaces to a single pod. The primary CNI — typically Cilium or Flannel — handles `eth0` for management traffic, while a secondary CNI configuration backed by SR-IOV creates `net1`, `net2`, and so on for RDMA data-plane traffic. Each secondary interface is defined by a `NetworkAttachmentDefinition` custom resource, and pods request them via a single pod annotation.
+
+SR-IOV (Single Root I/O Virtualization) is the PCIe hardware feature that makes this practical at scale. A single physical NIC (the Physical Function) can expose up to 127 isolated Virtual Functions, each appearing as an independent PCIe device with its own hardware queues, MAC address, and RDMA capability. When a pod is assigned an SR-IOV VF, it has a direct hardware path to the NIC's RDMA engine — bypassing the host kernel networking stack and enabling GPUDirect RDMA transfers directly from GPU memory to the wire.
+
+This chapter covers the complete Kubernetes network stack for GPU pods: Multus CNI for multi-NIC attachment, SR-IOV VF provisioning, the SR-IOV Network Operator for cluster-scale automated VF management, the NVIDIA Network Operator as an all-in-one deployment bundle, Whereabouts for cluster-wide IPAM on secondary networks, and GPUDirect RDMA configuration. The lab walkthrough uses Kind with macvlan and Soft-RoCE to simulate the full stack without real SR-IOV hardware.
+
+This chapter builds directly on Chapter 12 (Cilium as the primary CNI managing `eth0`) and Chapter 2 (RoCEv2 and RDMA fundamentals). Chapter 19 examines how NCCL uses the RDMA VFs this chapter provisions to implement ring-allreduce and tree-allreduce collective algorithms across the GPU fabric.
+
+---
+
 ## 13.1 The Multi-NIC Problem
 
 A GPU training pod needs at least two network interfaces:
-1. **Management/default CNI (eth0):** Kubernetes control plane, DNS, service mesh, monitoring — handled by Cilium or another primary CNI
+1. **Management/default CNI (eth0):** Kubernetes control plane, DNS, service mesh, monitoring — handled by Cilium or another primary CNI. CNI (Container Network Interface) is the Kubernetes plugin API that network providers implement to allocate IP addresses and configure interfaces when pods start.
 2. **RDMA data plane (net1, net2, ...):** High-bandwidth GPU-to-GPU collective traffic — must use the physical RDMA NIC with near-zero overhead; cannot share with management traffic
 
 Standard Kubernetes assigns exactly one network interface per pod. Multus CNI breaks this limitation.
@@ -236,7 +250,7 @@ kubectl get sriovnetworknodestates -n sriov-network-operator -o yaml
 
 ## 13.5 NVIDIA Network Operator
 
-The NVIDIA Network Operator bundles all network components for GPU nodes into a single Helm chart: MOFED driver (Mellanox OFED), SR-IOV operator, secondary CNI, RDMA device plugin, and NV-IPAM.
+The NVIDIA Network Operator bundles all network components for GPU nodes into a single Helm chart: MOFED driver (Mellanox OFED — the vendor-optimized InfiniBand and Ethernet driver stack that unlocks full RDMA performance on ConnectX NICs), SR-IOV operator, secondary CNI, RDMA device plugin, and NV-IPAM.
 
 ### 13.5.1 Installation
 
@@ -290,7 +304,7 @@ spec:
 
 ## 13.6 GPUDirect RDMA in Kubernetes
 
-With SR-IOV VFs and `nvidia-peermem` loaded, GPU memory can be registered as RDMA memory regions directly:
+With SR-IOV VFs and `nvidia-peermem` loaded — `nvidia-peermem` is a kernel module that allows the Mellanox RDMA driver to map GPU memory pages directly, enabling GPUDirect RDMA without a CPU-mediated bounce buffer — GPU memory can be registered as RDMA memory regions directly:
 
 ```python
 # Inside the container, using PyTorch + NCCL
@@ -403,6 +417,8 @@ kubectl cluster-info --context kind-multus-lab
 
 ### Step 3 — Install Flannel as Primary CNI
 
+Flannel is a lightweight Kubernetes CNI plugin that provides pod-to-pod IP routing using a simple overlay (VXLAN by default). It handles `eth0` assignment here; Multus will layer SR-IOV secondary interfaces on top.
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 
@@ -449,7 +465,7 @@ kubectl get crd | grep whereabouts
 
 ### Step 6 — Create the NetworkAttachmentDefinition (macvlan stand-in for SR-IOV)
 
-In this lab we use `macvlan` mode because Kind worker nodes are Docker containers with a virtual `eth0`. On real hardware you would replace `"type": "macvlan"` with `"type": "sriov"` and add a `deviceID` field.
+In this lab we use `macvlan` mode because Kind worker nodes are Docker containers with a virtual `eth0`. `macvlan` is a Linux kernel driver that creates virtual NICs sharing a physical interface but with distinct MAC addresses — it produces a secondary interface functionally similar to an SR-IOV VF but without hardware isolation or RDMA capability. On real hardware you would replace `"type": "macvlan"` with `"type": "sriov"` and add a `deviceID` field.
 
 Save as `nad-macvlan.yaml`:
 
@@ -621,7 +637,7 @@ data:
     import torch
     import torch.distributed as dist
 
-    dist.init_process_group(backend="gloo")   # gloo = CPU/socket fallback (no GPU needed)
+    dist.init_process_group(backend="gloo")   # gloo: Facebook's distributed communication library using CPU and TCP/IP sockets — the fallback when no GPU or RDMA hardware is present
     rank  = dist.get_rank()
     world = dist.get_world_size()
 

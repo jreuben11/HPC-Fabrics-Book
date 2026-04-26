@@ -9,7 +9,7 @@
 ### System Packages (Ubuntu 24.04)
 
 ```bash
-# libyang runtime and tools (yanglint, yang2json)
+# libyang: the C library for parsing and validating YANG models; yanglint is its CLI validator tool
 sudo apt install -y libyang2 libyang2-tools yang-tools
 
 # Containerlab — for spinning up SR Linux as the NETCONF target
@@ -25,6 +25,9 @@ containerlab version
 ```bash
 uv venv .venv && source .venv/bin/activate
 uv pip install ncclient pyang lxml xmltodict deepdiff netmiko paramiko
+# ncclient: Python NETCONF client; pyang: YANG validator and format converter;
+# xmltodict: converts XML to Python dicts; deepdiff: structural diff for nested Python objects;
+# paramiko: Python SSH library (ncclient's transport layer); netmiko: SSH automation library for network CLIs
 ```
 
 Verify the key packages:
@@ -37,6 +40,20 @@ pyang --version
 yanglint --version
 # yanglint SO 2.x.x
 ```
+
+---
+
+## Introduction
+
+Every device in an AI cluster fabric — spine switches, leaf switches, DPU-equipped servers, storage nodes — must be configured consistently and kept in a known, verifiable state. At the scale of a large GPU cluster, this configuration surface spans thousands of interfaces, BGP sessions, VRFs, ACLs, and QoS policies. The traditional approach — SSHing into devices and running CLI commands, then parsing the text output with regular expressions — is not just tedious; it is structurally incompatible with automation. CLI output formats change between NOS versions, parsing is brittle, and there is no notion of a transaction, a rollback, or a schema that defines what valid configuration looks like.
+
+Model-driven network management replaces CLI scraping with a three-layer architecture. YANG (Yet Another Next Generation, RFC 7950) is the data modeling language: it defines the schema — what leaf nodes, lists, containers, and constraints exist on a device. NETCONF (RFC 6241) is the configuration protocol: it carries YANG-structured XML over SSH, with explicit datastores (candidate, running, startup), transactional commit semantics, and a discard-changes rollback primitive. RESTCONF (RFC 8040) exposes the same YANG model over HTTP using JSON or XML, enabling REST-native tooling to read and write device configuration using the same schema as NETCONF.
+
+Together, these three technologies form the foundation of modern network automation pipelines. Configuration changes become version-controlled, schema-validated transactions. The diff between a golden desired state and the current running configuration is computable in structured data, not fragile text. Rollbacks are a single `<discard-changes>` RPC rather than manually reverting a patchwork of CLI commands. OpenConfig extends this by providing vendor-neutral YANG models for common functions — BGP, interfaces, platform resources — so the same automation code works across vendor equipment.
+
+The reader will leave this chapter able to write and validate YANG modules with `pyang` and `yanglint`, automate NETCONF configuration workflows with Python's `ncclient` library, and issue RESTCONF reads and writes with `curl`. The lab walkthrough uses Nokia SR Linux — available as a free container image — as the NETCONF/RESTCONF target, performing a full configure-validate-commit-rollback cycle.
+
+This chapter begins Part V and connects directly forward to Chapter 15, which replaces NETCONF's polling model with gNMI streaming telemetry — using the same OpenConfig YANG path namespace introduced here as the addressing scheme for real-time metric subscriptions.
 
 ---
 
@@ -320,7 +337,7 @@ curl -s -u admin:secret \
 
 ## 14.6 OpenConfig YANG Models
 
-OpenConfig is a working group of network operators (Google, Microsoft, AT&T, etc.) that maintains vendor-neutral YANG models for common network functions. OpenConfig models are what gNMI (Chapter 15) uses by default.
+OpenConfig is a working group of network operators (Google, Microsoft, AT&T, etc.) that maintains vendor-neutral YANG models for common network functions — interfaces, BGP, MPLS, platform hardware, and more. Because OpenConfig models are not tied to any single vendor's CLI or data representation, automation code written against them works across different NOS implementations. OpenConfig models are what gNMI (Chapter 15) uses by default as its path namespace for telemetry subscriptions.
 
 ```bash
 # Clone OpenConfig models

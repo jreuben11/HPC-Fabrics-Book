@@ -26,10 +26,14 @@ sudo systemctl enable --now frr
 ```bash
 uv venv .venv && source .venv/bin/activate
 uv pip install torch torchvision paramiko prometheus-client
+# paramiko: pure-Python SSH2 library, used here to programmatically inject faults via SSH into network nodes
+# prometheus-client: official Python Prometheus client library for exposing metrics via an HTTP /metrics endpoint
 python -c "import torch, paramiko, prometheus_client; print('OK')"
 ```
 
 ### Verify RDMA tooling
+
+`rdma-core` is the Linux RDMA userspace library stack, and `libibverbs-dev` provides the `ibverbs` API headers and development libraries for writing RDMA applications; together they supply the `rdma`, `ibv_devinfo`, and related tools. `perftest` is a collection of RDMA performance test utilities (including `ib_send_bw`, `ib_read_bw`, and `ib_write_bw`) used to benchmark and verify RDMA link throughput and latency.
 
 ```bash
 rdma link show
@@ -42,6 +46,18 @@ ibv_devinfo | head -4
 ```
 
 ---
+
+## Introduction
+
+Distributed training jobs fail differently from web services. A web service can tolerate one backend going down because requests are independent — the load balancer simply stops sending traffic to the failed backend. A training job is a single synchronous computation spread across hundreds of GPUs, and every rank must complete every AllReduce before any rank can advance. When one rank's network link fails, every other rank blocks. When all ranks block, the entire cluster's GPU time is wasted until either the job dies or a watchdog fires.
+
+This chapter builds a complete fault-tolerance stack for AI network fabrics, working layer by layer from the physical link to the training framework. The starting point is the threat model (§28.1): understanding exactly how network faults translate into job failures, why the default timeout intervals are catastrophically long for GPU clusters, and what the three failure modes are — RDMA QP retry exhaustion, AllReduce barrier hang, and checkpoint corruption — and how they interact.
+
+From the network layer, the chapter covers BFD (§28.2), the protocol that reduces link-failure detection from 90 seconds (BGP keepalive default) to 300 milliseconds. With BFD, the routing plane knows about a link failure before NCCL's collective timeout fires, enabling clean route withdrawal and path failover rather than rank timeout and job restart. Section 28.3 completes the RDMA layer by explaining QP timeout and retry parameters — the four attributes that determine how long a Queue Pair waits before declaring a remote unreachable and surfacing an error to NCCL. Section 28.4 addresses PFC Watchdog, which prevents the lossless fabric itself from entering a deadlocked state where no packets flow at all.
+
+The application-layer sections (§28.5–28.8) cover recovery through `torchrun` elastic training, checkpoint strategies that survive partial rank failure, circuit-breaker patterns for collective operations, and the observability infrastructure needed to correlate network events with training failures. The chapter concludes with an end-to-end lab that chains BFD, torchrun restarts, and a Prometheus RDMA exporter into a single fault injection and recovery demonstration.
+
+This chapter connects directly to Chapter 2 (RoCEv2 and RDMA Queue Pairs), Chapter 27 (adaptive routing to reduce congestion before it causes failures), and Chapter 15 (gNMI telemetry, which provides the on-change subscription used in §28.8 to detect BFD state transitions). Chapter 19 (GPU collective communications) provides the NCCL context that makes the timeout and recovery behaviors meaningful.
 
 ## 28.1 Why Network Faults Kill Training Jobs
 
@@ -529,7 +545,7 @@ groups:
 
 ### BFD State Change via gNMI
 
-OpenConfig models include BFD session state under `openconfig-bfd:bfd`. A gNMI subscription fires an update on every state transition:
+OpenConfig models include BFD session state under `openconfig-bfd:bfd`. A gNMI subscription fires an update on every state transition. `gnmic` is an open-source gNMI client CLI tool (by Nokia) that supports Subscribe, Get, and Set RPCs against any gNMI-capable network device, making it the standard command-line interface for on-change telemetry subscriptions.
 
 ```bash
 gnmic subscribe \

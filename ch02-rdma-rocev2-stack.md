@@ -112,6 +112,20 @@ for dev in devs:
 
 ---
 
+## Introduction
+
+Remote Direct Memory Access (RDMA) is the single most impactful networking technology in the modern AI compute stack. By allowing a NIC to transfer data directly into or out of remote application memory — bypassing the CPU, the kernel, and the socket layer entirely — RDMA makes it possible to sustain 400 Gbps gradient exchange between GPUs at latencies measured in single-digit microseconds. Without RDMA, training large language models at scale would require orders of magnitude more CPU resources and would be bounded by software overhead rather than physics.
+
+This chapter builds the RDMA programming model from first principles, starting with the verbs API that underpins every RDMA transport — InfiniBand, RoCEv1, and the now-dominant RoCEv2. The verbs abstraction (Protection Domains, Memory Regions, Queue Pairs, Completion Queues, and Work Requests) is the universal language of RDMA programming; understanding it is prerequisite to working with any RDMA-capable library, from `libibverbs` directly to UCX (Chapter 4) to NCCL (Chapter 19).
+
+We examine the protocol landscape in depth: why InfiniBand dominated early HPC clusters, why RoCEv1 failed to achieve broad adoption, and why RoCEv2 — RDMA semantics over standard UDP/IP/Ethernet — won the AI cluster market. The critical trade-off is that Ethernet's lossy nature requires active congestion management: DCQCN (Data Center Quantized Congestion Notification), the ECN-based rate-control algorithm, is what prevents packet drops from triggering catastrophic RDMA retransmission cascades across an entire training job.
+
+The chapter concludes with GPUDirect RDMA, the NVIDIA technology that removes the final software bottleneck: the copy between CPU DRAM and GPU HBM. With GPUDirect, gradient tensors flow directly from one GPU's HBM through the PCIe bus into the NIC and across the fabric into a remote GPU's HBM, with zero CPU involvement on the data path.
+
+The lab walkthrough exercises the complete benchmarking pipeline using Soft-RoCE (`rdma_rxe`) — a kernel software implementation of RoCEv2 over standard Ethernet — on a pair of virtual interfaces, so no hardware RDMA NIC is required. The techniques (perftest bandwidth sweeps, latency histograms, multi-QP scaling) are identical to those used for production cluster sign-off. Chapter 3 (PTP) builds on the NIC hardware clock concepts introduced here; Chapter 4 (UCX/LibFabric) sits directly above the verbs layer covered in this chapter.
+
+---
+
 ## 2.1 Why RDMA?
 
 The fundamental constraint of classical networking: every packet received by a host must traverse the kernel's network stack, be copied into a socket buffer, and be read by an application via a system call. At 400 Gbps, this overhead consumes entire CPU cores that would otherwise feed GPUs. RDMA eliminates it.
@@ -248,7 +262,7 @@ On receiving a CNP, the sender NIC applies DCQCN's rate-control algorithm:
 2. **Rate recovery**: increase rate additively (AI) until the bandwidth-delay product is reached, then switch to hyperincrement (HA) for fast recovery
 3. **Timer-based actions**: if no CNP arrives for a period, the NIC assumes congestion cleared and begins recovery
 
-**Key tuning parameters** (set on the NIC via `mlnx_qos` or DOCA):
+**Key tuning parameters** (set on the NIC via `mlnx_qos` — Mellanox's QoS configuration tool for ConnectX NICs — or DOCA, NVIDIA's data-center infrastructure SDK for BlueField DPUs):
 - `cnp_dscp`: DSCP value for CNP packets (must be mapped to a high-priority QoS queue)
 - `dcqcn_alpha_g`: EWMA decay for the α parameter
 - `dcqcn_rp_initial_alpha`: starting α value
@@ -263,14 +277,14 @@ On receiving a CNP, the sender NIC applies DCQCN's rate-control algorithm:
 rdma-core/
 ├── libibverbs/      # Core verbs API and provider loading
 ├── librdmacm/       # Connection management (RDMA CM)
-├── ibacm/           # Address and route resolution daemon
+├── ibacm/           # Address and route resolution daemon (resolves GIDs and LIDs)
 ├── rdma/            # iproute2 rdma subcommand
 ├── providers/
 │   ├── mlx5/        # Mellanox/NVIDIA ConnectX direct verbs
 │   ├── efa/         # AWS Elastic Fabric Adapter
 │   ├── rxe/         # Soft-RoCE (RDMA over standard Ethernet NIC)
 │   └── ...
-└── pyverbs/         # Python bindings to libibverbs
+└── pyverbs/         # Python bindings to libibverbs (Cython-based, used for scripting and testing)
 ```
 
 ### rdma CLI
@@ -344,7 +358,7 @@ With GPUDirect:     GPU HBM → PCIe → NIC → network
 ```
 
 Requirements:
-- `nvidia-peermem` kernel module (or `nv_peer_mem` on older systems)
+- `nvidia-peermem` kernel module (or `nv_peer_mem` on older systems) — a kernel module that maps GPU BAR memory into the RDMA subsystem so the NIC can DMA to it directly
 - Memory region registered with `ibv_reg_mr` on a pointer returned by `cudaMalloc` (or `cuMemAlloc`)
 - GPU and NIC on the same PCIe domain for optimal performance
 
@@ -526,7 +540,7 @@ Server will print and wait:
 ib_write_bw -d rxe1 -x 3 --port 18515 10.10.0.1
 ```
 
-The `-x 3` flag selects GID index 3 (IPv4 RoCEv2). The client connects to the server's IP (`10.10.0.1`).
+The `-x 3` flag selects GID index 3 (IPv4 RoCEv2). A GID (Global Identifier) is the 128-bit RoCEv2 address that maps to an IPv4 or IPv6 address; a LID (Local Identifier) is the 16-bit address used in InfiniBand fabric routing. The client connects to the server's IP (`10.10.0.1`).
 
 Expected combined output after the test completes:
 
@@ -710,7 +724,7 @@ cat /sys/class/infiniband/rxe0/ports/1/counters/port_xmit_discards
 
 ### Step 11: Simulate ECN-like delay with netem and observe latency impact
 
-Add artificial delay to simulate a congested fabric path:
+`netem` (Network Emulator) is a Linux traffic-control (`tc`) discipline that injects configurable delay, jitter, loss, and reordering into a network interface, enabling reproducible testing of protocol behavior under impaired conditions. Add artificial delay to simulate a congested fabric path:
 
 ```bash
 # Add 1 ms delay on veth1 (simulating switch queuing)

@@ -33,6 +33,20 @@ uv pip install opentelemetry-sdk \
 
 ---
 
+## Introduction
+
+An AI cluster running at scale generates an enormous and continuous stream of operational signals: GPU utilization percentages, NIC byte counters, BGP session state changes, RDMA port error counts, kernel OOM events, and NCCL timeout messages. Without a coherent observability pipeline to collect, correlate, and visualize these signals in real time, debugging a slow AllReduce or a degraded training run becomes a multi-hour exercise in log archaeology across dozens of hosts.
+
+This chapter builds a full observability stack grounded in three open-source pillars: OpenTelemetry for instrumentation and collection, Prometheus for metrics storage and alerting, and Grafana for visualization and dashboard composition. These three systems have become the de facto standard across cloud-native and HPC environments alike — and they compose cleanly with the GPU-specific and network-specific exporters that AI cluster operators depend on daily.
+
+The central insight is that effective cluster observability requires correlating signals from different layers simultaneously. A GPU compute stall (visible in DCGM metrics), a spike in NIC receive drops (visible in node_exporter counters), and a NCCL timeout (visible in log tails) may all be symptoms of a single congestion event on the training fabric — but only a unified dashboard that aligns these time series on the same axis makes that causality apparent in seconds rather than hours.
+
+Readers will learn how to deploy the OTel Collector as a universal telemetry aggregation point, configure the key exporters for GPU and fabric metrics, write PromQL queries that surface common AI cluster failure modes, build Grafana dashboards that correlate compute and network signals, and set up alert rules with appropriate hysteresis for production use.
+
+This chapter sits at the intersection of Chapter 15 (gNMI/OpenConfig streaming telemetry), which provides switch-level counters via gnmic, and Chapter 12 (Cilium/eBPF), whose Hubble component feeds pod-level flow metrics into the same Prometheus stack. Chapter 22 (Network CI Validation) builds on this observability foundation to automate regression detection in lab and staging environments.
+
+---
+
 ## 16.1 The Three Pillars — Applied to AI Clusters
 
 The classical observability model — metrics, logs, traces — maps to concrete problems in AI cluster operations:
@@ -42,6 +56,8 @@ The classical observability model — metrics, logs, traces — maps to concrete
 | **Metrics** | GPU utilization, NIC counters, AllReduce throughput over time | Prometheus + DCGM exporter + gnmic |
 | **Logs** | NCCL debug output, kernel RDMA events, OOM kills | Loki + Promtail |
 | **Traces** | End-to-end latency from training step → AllReduce → network → completion | OpenTelemetry + Tempo |
+
+Prometheus is a pull-based time-series metrics database that scrapes exporters at configurable intervals and stores samples in a local TSDB. Loki is a log aggregation system from Grafana Labs, designed to index only log metadata (labels) while compressing the raw log stream — making it inexpensive to ingest high-volume structured logs such as NCCL debug output. Promtail is the Loki log-shipping agent that tails log files on each host and forwards them to Loki. Grafana Tempo is a distributed tracing backend that stores and queries OpenTelemetry trace data, enabling end-to-end latency analysis across processes and nodes.
 
 The practical insight: most cluster debugging requires correlating all three simultaneously — a GPU stall (metric) coincides with a NCCL timeout (log) coincides with high tail latency on a specific fabric link (trace/metric).
 
@@ -124,6 +140,8 @@ service:
 ---
 
 ## 16.3 Prometheus and Exporters
+
+Prometheus scrapes metrics from *exporters* — small HTTP servers that translate a data source's native instrumentation into the Prometheus text format. The DCGM exporter (Data Center GPU Manager exporter) is NVIDIA's official Prometheus exporter for GPU telemetry; it communicates with the DCGM daemon, which reads GPU counters directly from the driver without performance-monitoring overhead. `gnmic` is a gNMI client that can subscribe to OpenConfig telemetry streams from switches and re-expose the data as a Prometheus metrics endpoint, bridging switch-level telemetry into the same Prometheus stack as host and GPU metrics.
 
 ### Key Exporters for AI Clusters
 
@@ -274,6 +292,8 @@ increase(hubble_drop_total{reason="POLICY_DENIED"}[5m])
 ---
 
 ## 16.6 Telegraf for Infrastructure Metrics
+
+Telegraf is a plugin-driven metrics collection agent from InfluxData. It supports over 300 input plugins, making it the practical choice for infrastructure sources that lack native Prometheus exporters. SNMP (Simple Network Management Protocol) is the legacy polling protocol used by virtually all network devices to expose interface counters, error rates, and device status via a standardized MIB (Management Information Base) hierarchy. IPMI (Intelligent Platform Management Interface) is a hardware-level management interface that exposes CPU temperature, fan speed, power consumption, and other baseboard sensors independently of the operating system.
 
 Telegraf handles metrics that Prometheus doesn't scrape well — SNMP, IPMI, NIC-specific stats:
 
@@ -821,7 +841,7 @@ Expected:
 qdisc fq_codel 0: root refcnt 2 limit 10240p flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64
 ```
 
-(The default qdisc is restored — `fq_codel` on Ubuntu 24.04.)
+(The default qdisc is restored — `fq_codel` on Ubuntu 24.04. `fq_codel` is the Fair Queuing Controlled Delay scheduler, a Linux traffic-control qdisc that combines per-flow fair queuing with the CoDel AQM algorithm to actively manage queue depth and minimize bufferbloat under load.)
 
 In Grafana Alerting, the drop rate query returns to `0`. After the next evaluation cycle (10 seconds), the alert transitions:
 

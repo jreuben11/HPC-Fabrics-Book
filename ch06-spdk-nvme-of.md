@@ -55,7 +55,7 @@ ls -lh build/bin/nvmf_tgt
 
 ### Python uv setup for management scripts
 
-SPDK exposes a JSON-RPC socket for runtime configuration. Python scripts that talk to this socket (or manage SPDK remotely via SSH) benefit from an isolated venv:
+SPDK exposes a JSON-RPC socket for runtime configuration. Python scripts that talk to this socket (or manage SPDK remotely via SSH) benefit from an isolated venv. `paramiko` is a Python implementation of the SSH protocol, used here to issue SPDK RPC commands on remote nodes over a secure channel:
 
 ```bash
 # From within the spdk/ directory:
@@ -69,6 +69,20 @@ uv pip install paramiko
 python -c "import paramiko; print(paramiko.__version__)"
 # Expected: 3.x.x
 ```
+
+---
+
+## Introduction
+
+Storage is not a peripheral concern in AI training clusters — it is a critical path component that can idle thousands of GPUs if not engineered carefully. This chapter examines SPDK (Storage Performance Development Kit) and NVMe-oF (NVMe over Fabrics), two technologies that together bring storage I/O performance into alignment with the throughput and latency demands of large-scale model training.
+
+The central problem is checkpoint I/O. A 70B-parameter model in fp32 with optimizer state occupies roughly 800 GB on disk. Training runs checkpoint periodically — often every few hundred steps — to guard against hardware failure. If the checkpoint write takes longer than a single training step, GPUs stall, wasting expensive accelerator time. The Linux kernel's NVMe driver, designed for general-purpose workloads, leaves significant performance on the table through interrupt overhead, block-layer latency, and memory copies between kernel and user space. SPDK solves this by moving the NVMe driver entirely into user space, adopting a polling model identical in spirit to DPDK's kernel-bypass approach from Chapter 5.
+
+NVMe-oF extends the NVMe command set across a network fabric, allowing remote SSDs to appear as local NVMe devices. Over RDMA (RoCE or InfiniBand), NVMe-oF achieves sub-10 µs latency — comparable to local PCIe-attached NVMe. Over TCP, it provides a practical checkpoint path on the management Ethernet when RDMA bandwidth is reserved for collective communication. This separation of checkpoint traffic from gradient traffic is a key architectural pattern that recurs throughout Part IV of this book.
+
+The reader will learn: how SPDK's polling reactor model eliminates I/O overhead; how to configure an NVMe-oF target and initiator with both RDMA and TCP transports; how SPDK's blobstore and RAID layers compose for high-bandwidth checkpoint writing; and how to benchmark the full stack with fio and io_uring. The lab walkthrough requires no physical NVMe hardware — a RAM-backed `bdev_malloc` provides a functionally complete NVMe-oF target for development and testing.
+
+This chapter connects directly to Chapter 5 (DPDK) — SPDK's user-space architecture mirrors DPDK's philosophy exactly, reusing DPDK's EAL and hugepage memory allocator. It sets the stage for Chapter 18 (Distributed Storage), which addresses the cluster-wide incast and consistency problems that arise when thousands of GPUs checkpoint simultaneously.
 
 ---
 
@@ -99,7 +113,7 @@ At NVMe speeds (7 GB/s sequential, 1M+ IOPS), even 2 µs overhead per I/O repres
 
 ## 6.3 SPDK Architecture
 
-SPDK mirrors DPDK's philosophy applied to storage: move the NVMe driver entirely to user space, poll for completions rather than interrupt, and process I/O on a dedicated CPU core.
+SPDK (Storage Performance Development Kit) is an open-source library from Intel that provides a collection of user-space, poll-mode drivers and tools for building high-performance storage applications. SPDK mirrors DPDK's philosophy applied to storage: move the NVMe driver entirely to user space, poll for completions rather than interrupt, and process I/O on a dedicated CPU core.
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -115,6 +129,8 @@ SPDK mirrors DPDK's philosophy applied to storage: move the NVMe driver entirely
 │        VFIO              │   NVMe SSD hardware  │
 └──────────────────────────┴─────────────────────┘
 ```
+
+VFIO (Virtual Function I/O) is a Linux kernel framework that allows user-space programs to directly control PCI devices — including NVMe SSDs — by safely removing them from kernel drivers and granting DMA access through the IOMMU. SPDK uses VFIO to bind NVMe devices to user space, enabling its poll-mode driver to program submission and completion queues directly without any kernel involvement.
 
 ### 6.3.1 Initialization
 
@@ -230,7 +246,9 @@ nvme connect -t rdma -a 192.168.1.10 -s 4420 \
     -n nqn.2024-01.io.spdk:cnode1
 
 # Device appears as /dev/nvmeXnY
-# Benchmark with fio:
+# Benchmark with fio (flexible I/O tester):
+# io_uring is a Linux kernel I/O interface (introduced in 5.1) that uses
+# shared ring buffers between kernel and user space for zero-syscall async I/O.
 fio --filename=/dev/nvme1n1 --rw=randread --bs=4k \
     --numjobs=4 --iodepth=64 --runtime=30 \
     --ioengine=io_uring --direct=1 --name=nvmeof_test
@@ -263,9 +281,9 @@ Expected: 3–5 GB/s write bandwidth over 25GbE management, sufficient to write 
 For applications that need a file-like interface to SPDK without a full POSIX filesystem:
 
 - **Blobstore:** manages "blobs" (variable-size objects) on an SPDK bdev; handles metadata, allocation, and crash consistency
-- **BlobFS:** a minimal filesystem on top of blobstore; used by RocksDB-SPDK for write-optimized KV storage
+- **BlobFS:** a minimal filesystem on top of blobstore; used by RocksDB-SPDK for write-optimized KV storage. RocksDB is Facebook's open-source log-structured merge (LSM) key-value store; the SPDK integration replaces its POSIX file I/O with direct SPDK blobstore calls to eliminate kernel overhead on write-intensive workloads.
 
-This is relevant for checkpointing frameworks (e.g., PyTorch's async checkpoint) that need atomic, crash-consistent writes without the overhead of a full POSIX filesystem.
+This is relevant for checkpointing frameworks (e.g., PyTorch's async checkpoint — a feature introduced in PyTorch 2.0 that serializes model state in a background thread while training continues on the GPU) that need atomic, crash-consistent writes without the overhead of a full POSIX filesystem.
 
 ---
 

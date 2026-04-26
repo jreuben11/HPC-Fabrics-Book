@@ -6,7 +6,7 @@
 
 ## Installation
 
-This chapter uses Containerlab as the lab orchestrator, Docker as the container runtime, SR Linux and SONiC-VS as the NOS images, FRR as the host-router control plane, and gnmic for gNMI streaming telemetry. All tools run on Ubuntu 24.04.
+This chapter uses Containerlab as the lab orchestrator (a tool that deploys multi-vendor network topologies as Docker containers, wiring them together with virtual links defined in a YAML file), Docker as the container runtime, SR Linux and SONiC-VS as the NOS images, FRR as the host-router control plane, and gnmic (a gNMI CLI client for querying and subscribing to network telemetry) for gNMI streaming telemetry. All tools run on Ubuntu 24.04.
 
 ### Docker
 
@@ -60,6 +60,8 @@ sudo systemctl status frr | grep Active
 
 ### Python automation environment (uv)
 
+`ncclient` is a Python library implementing the NETCONF client protocol (RFC 6241) for configuration management. `netmiko` is a multi-vendor SSH library that simplifies parameterized CLI interactions with network devices from many vendors.
+
 ```bash
 # Install uv if not already present
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -78,11 +80,25 @@ python -c "import ncclient, paramiko, netmiko; print('All imports OK')"
 
 ---
 
+## Introduction
+
+The network operating system (NOS) running on a switch determines how that switch is configured, automated, observed, and extended. For most of networking history, that software was proprietary, opaque, and tightly coupled to a single vendor's hardware. The rise of open NOSes — driven by hyperscalers who needed to operate networks at a scale and velocity that proprietary platforms could not support — fundamentally changed this equation, and AI cluster operators are the direct beneficiaries.
+
+This chapter surveys the open NOS landscape as it applies to AI cluster fabrics. SONiC (Software for Open Networking in the Cloud) is the production-grade choice for hyperscaler-class switching: a collection of containerized daemons communicating through a Redis database, running on any SAI-compliant ASIC from Broadcom, Mellanox, or Marvell. SR Linux is Nokia's programmability-first NOS: every configuration object is YANG-modeled, every state path is accessible via gNMI, and custom applications can be injected via the NDK without forking the NOS itself. FRRouting (FRR) provides the routing control plane — BGP, OSPF, IS-IS, EVPN — for both, and is the standard tool for configuring eBGP underlay fabrics in AI clusters.
+
+The reader will learn: how SONiC's Redis-centric architecture decouples configuration intent from ASIC programming; how SR Linux's YANG-native model enables controller-free automation; how to configure FRR for a spine-leaf eBGP fabric with ECMP and sub-second BFD failure detection; and how Containerlab composes these NOSes into a full lab topology on a single laptop. The chapter also surveys VyOS, DENT, OpenWrt, FreeRTOS, and Zephyr — the open NOS and RTOS landscape at the edges of the AI cluster fabric.
+
+The lab walkthrough builds a two-spine, two-leaf BGP fabric using SR Linux and SONiC-VS containers, verifies ECMP convergence, simulates a link failure with BFD, and streams gNMI telemetry from SR Linux to gnmic — all within Containerlab running on Ubuntu 24.04.
+
+This chapter connects backward to Chapter 5 (DPDK) and Chapter 7 (eBPF), which addressed the data-plane performance problems inside individual hosts, and forward to Chapter 14 (NETCONF/YANG/RESTCONF) and Chapter 15 (gNMI/OpenConfig), which cover the management protocols that open NOSes like SR Linux expose natively.
+
+---
+
 ## 8.1 The End of the Monolithic Network Appliance
 
 For decades, a network switch was a black box: proprietary ASIC, proprietary OS, proprietary CLI. Configuration required vendor-specific commands, automation required screen-scraping, and replacing the switch meant re-learning everything.
 
-Disaggregation broke this model. The emergence of merchant silicon (Broadcom Tomahawk, Trident, Intel Tofino) — commodity ASICs delivering the same forwarding performance as proprietary chips — enabled a decoupling of hardware from software. The Switch Abstraction Interface (SAI) standardized the API between the NOS and the ASIC, allowing the same NOS to run on hardware from different vendors.
+Disaggregation broke this model. The emergence of merchant silicon (Broadcom Tomahawk, Trident, Intel Tofino) — commodity ASICs delivering the same forwarding performance as proprietary chips — enabled a decoupling of hardware from software. The Switch Abstraction Interface (SAI) is an open API specification, maintained by the Open Compute Project, that defines a vendor-neutral C interface between a NOS and the underlying ASIC SDK, so the same NOS binary can target ASICs from multiple vendors without modification.
 
 Three open NOSes now dominate different parts of the AI infrastructure landscape: **SONiC** for hyperscaler DC switching, **SR Linux** for programmability-first environments, and **FRR** as the universal routing engine embedded in both.
 
@@ -92,7 +108,7 @@ Three open NOSes now dominate different parts of the AI infrastructure landscape
 
 ### 8.2.1 Architecture Overview
 
-SONiC is a collection of containerized networking daemons running on a standard Debian Linux host, with a Redis database at the center:
+SONiC is a collection of containerized networking daemons running on a standard Debian Linux host, with a Redis database at the center. Redis is an open-source in-memory data structure store used here as SONiC's inter-process communication bus: each daemon reads and writes to named tables in Redis, and changes propagate through a publish-subscribe mechanism without direct daemon-to-daemon coupling:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -116,7 +132,7 @@ SONiC is a collection of containerized networking daemons running on a standard 
 └─────────────────────────────────────────────────────────┘
 ```
 
-Every configuration change follows the same path: write to CONFIG_DB → orchagent reads APP_DB → translates to ASIC_DB entries → syncd calls SAI → ASIC SDK programs the forwarding hardware.
+Every configuration change follows the same path: write to CONFIG_DB → orchagent (the orchestration agent daemon that translates high-level application state from APP_DB into low-level ASIC_DB entries) reads APP_DB → translates to ASIC_DB entries → syncd (the synchronization daemon that bridges ASIC_DB changes to vendor SAI API calls) calls SAI → ASIC SDK programs the forwarding hardware.
 
 ### 8.2.2 Redis ConfigDB
 
@@ -192,7 +208,7 @@ docker pull docker.io/sonicdev/sonic-vs:latest
 
 ### 8.3.1 Design Principles
 
-SR Linux was designed from the ground up with three principles: everything is YANG-modeled, everything is gNMI-accessible, and everything is extensible via the NDK (Network Developer Kit). There is no concept of a CLI-only feature — if it exists in SR Linux, it has a YANG path.
+SR Linux was designed from the ground up with three principles: everything is YANG-modeled (YANG is a data modeling language, defined in RFC 7950, that describes the structure, types, and constraints of network configuration and state data in a machine-readable schema), everything is gNMI-accessible (gNMI, gRPC Network Management Interface, is a gRPC-based protocol for streaming telemetry and configuration management using YANG paths as addresses), and everything is extensible via the NDK (Network Developer Kit). There is no concept of a CLI-only feature — if it exists in SR Linux, it has a YANG path.
 
 ### 8.3.2 YANG-Native Configuration
 
@@ -306,6 +322,8 @@ write memory
 
 ### 8.4.3 EVPN in FRR
 
+EVPN (Ethernet VPN, RFC 7432) is a BGP address family that distributes MAC and IP reachability information for overlay networks, most commonly used as the control plane for VXLAN tunnels. It replaces the flood-and-learn MAC discovery of traditional bridging with a scalable BGP-based mechanism.
+
 FRR supports BGP-EVPN natively for VXLAN overlay control:
 
 ```bash
@@ -382,7 +400,7 @@ save
 
 ### 8.6.2 DENT
 
-DENT (Disaggregated Ethernet NOS) is a Linux Foundation project targeting enterprise edge and campus switching — the access and distribution layers that connect office networks, campus buildings, and light-industrial environments. It uses the `switchdev` kernel subsystem (rather than SAI) as its hardware abstraction layer, which means ASIC forwarding is controlled through standard Linux netlink interfaces rather than a vendor-specific SDK.
+DENT (Disaggregated Ethernet NOS) is a Linux Foundation project targeting enterprise edge and campus switching — the access and distribution layers that connect office networks, campus buildings, and light-industrial environments. It uses the `switchdev` kernel subsystem (rather than SAI) as its hardware abstraction layer. `switchdev` is a Linux kernel framework introduced in 4.0 that allows a physical switch ASIC to be represented as a Linux network device, offloading bridge, FIB, and ACL forwarding entries to the hardware through standard netlink APIs rather than a vendor-specific user-space SDK.
 
 DENT is not used in AI cluster core fabrics, but it is relevant for the out-of-band management networks that every AI cluster requires: the 1GbE or 10GbE switches that carry IPMI/BMC traffic, console server access, and cluster management plane communication. Running DENT on commodity hardware for these management racks aligns with the same open-NOS philosophy as the data plane.
 

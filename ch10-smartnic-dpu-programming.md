@@ -8,6 +8,8 @@
 
 ### OVS-DPDK (host-side stand-in for DPU OVS)
 
+OVS-DPDK is the DPDK-accelerated data path for Open vSwitch (OVS). Standard OVS uses the kernel's network stack and context switches for packet processing; OVS-DPDK moves the forwarding plane entirely to user space using DPDK poll-mode drivers, eliminating interrupt and system-call overhead. On a DPU, OVS-DPDK runs on the ARM cores and offloads matched flows to the ConnectX ASIC for wire-rate forwarding.
+
 ```bash
 sudo apt install -y openvswitch-switch openvswitch-dpdk
 # Verify
@@ -92,12 +94,26 @@ make -j$(nproc)
 
 ---
 
+## Introduction
+
+Modern GPU servers contain an architectural tension: the host CPU must simultaneously feed data to the GPUs, manage container networking overhead, enforce security policy, and export telemetry — while also not impeding the GPUs' primary work. In practice, a busy OVS (Open vSwitch) instance or an active IPsec termination can consume 2–4 CPU cores per host, a significant fraction of the total CPU budget on a 2-socket server. The DPU (Data Processing Unit) resolves this tension by moving network processing off the host CPU entirely.
+
+A DPU is a SmartNIC that integrates a high-performance NIC ASIC with a full general-purpose compute subsystem — ARM cores, local DRAM, and PCIe connectivity to the host — on a single card. From the host's perspective, a DPU appears as a standard PCIe NIC with SR-IOV virtual functions. From the fabric's perspective, it is a 400 Gbps network endpoint. On the DPU itself, a full Linux environment runs an independent software stack: OVS-DPDK for virtual switching, RDMA proxy for multi-tenant isolation, IPsec for encryption, and telemetry agents — all without consuming a single host CPU cycle.
+
+This chapter covers the DPU architecture using NVIDIA BlueField-3 as the primary reference, the DOCA (Data Center Infrastructure on a Chip Architecture) SDK for DPU application development, OVS-DPDK offload to the DPU ARM cores, eBPF offload to NIC silicon, and P4/PNA programs on SmartNIC targets such as AMD Pensando DSC. Each technology is placed in the context of AI cluster deployment patterns: which workloads belong on the DPU, which stay on the host, and how the DPU's management isolation enables secure multi-tenant GPU infrastructure.
+
+The lab walkthrough uses OVS-DPDK running on the host as a functional stand-in for DPU OVS — the architecture, configuration, and observability tooling are identical — and the DOCA development container to compile a flow steering example without requiring physical BlueField hardware.
+
+This chapter sits at the intersection of Part II (Kernel-Bypass & Programmable I/O) and Part III (Programmable Fabric): the DPU is the natural convergence point for DPDK (Chapter 5), eBPF/XDP (Chapter 7), and P4 (Chapter 9), applied at the host edge rather than in the fabric switches. It connects forward to Chapter 26 (Network Security & Zero Trust), where the DPU's isolation properties enable the cryptographic separation required for secure AI infrastructure.
+
+---
+
 ## 10.1 The DPU as Network Control Point
 
 A Data Processing Unit (DPU) is a SmartNIC with general-purpose compute: ARM cores, memory, and a high-performance NIC ASIC on a single PCIe card. In an AI cluster, the DPU sits between the host CPU and the network, making it the natural place to run:
 
 - OVS-DPDK (vSwitch) without consuming host CPU cores
-- RDMA proxy and GPUDirect acceleration
+- RDMA proxy and GPUDirect acceleration (GPUDirect RDMA is an NVIDIA technology that allows the NIC to DMA data directly into GPU memory, bypassing the host CPU and system DRAM entirely, critical for low-latency NCCL collective operations)
 - IPsec / TLS termination for secure multi-tenant fabrics
 - Network telemetry collection without host involvement
 - P4 programs compiled to the NIC ASIC
@@ -108,7 +124,7 @@ The key value proposition: host CPU cores freed from networking tasks are availa
 
 | Class | Examples | Capabilities |
 |---|---|---|
-| Standard NIC | Mellanox ConnectX-6 | RDMA, SR-IOV, hardware offloads |
+| Standard NIC | Mellanox ConnectX-6 | RDMA, SR-IOV (Single Root I/O Virtualization — a PCIe standard that allows a single physical NIC to present multiple Virtual Functions to VMs or containers, each with dedicated queues and hardware isolation), hardware offloads |
 | SmartNIC | Netronome Agilio, Pensando DSC | Programmable forwarding (P4/eBPF), limited compute |
 | DPU | NVIDIA BlueField-3, AMD Pensando Elba, Marvell OCTEON | Full ARM SoC + high-port NIC ASIC, runs Linux |
 
@@ -230,6 +246,8 @@ DPU (ARM):
   Network fabric (400GbE)
 ```
 
+`vhost-user` is a userspace implementation of the Linux vhost protocol that uses a Unix domain socket and shared memory to transfer packet buffer descriptors between a guest VM or container and an OVS-DPDK process, eliminating kernel involvement from the fast-path packet transfer. `virtio` is the paravirtualized I/O standard that the guest VM uses to communicate with the virtual NIC presented by the host or DPU.
+
 ### Configuration
 
 ```bash
@@ -241,7 +259,9 @@ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0xF  # cores 0-3
 # Create DPDK bridge
 ovs-vsctl add-br br0 -- set Bridge br0 datapath_type=netdev
 
-# Add representor port (represents host VF in DPU OVS)
+# Add representor port — a software port in OVS that represents a physical
+# VF (Virtual Function) from the host, used to apply OVS policies to traffic
+# entering and leaving each VF.
 ovs-vsctl add-port br0 pf0vf0 -- set Interface pf0vf0 \
     type=dpdk options:dpdk-devargs=0000:03:00.0,representor=[0]
 
@@ -285,7 +305,7 @@ Several SmartNIC targets support P4 programs:
 
 | Platform | P4 Architecture | Notes |
 |---|---|---|
-| Intel Tofino-based SmartNICs | TNA | Full Tofino pipeline on a PCIe card |
+| Intel Tofino-based SmartNICs | TNA (Tofino Native Architecture — Intel's proprietary P4 architecture model for Tofino ASICs, which exposes stateful ALUs and recirculation capabilities not present in the portable V1Model) | Full Tofino pipeline on a PCIe card |
 | AMD Pensando DSC | PNA (Portable NIC Architecture) | P4₁₆ with PNA extern model |
 | Marvell OCTEON | Custom | Partial P4 support |
 
@@ -348,6 +368,8 @@ GPU server (8× H100):
       - GPUDirect RDMA acceleration
       - Secure boot attestation
 ```
+
+IPsec (Internet Protocol Security) is a suite of IETF standards that authenticate and encrypt IP packets at the network layer; running IPsec termination on the DPU provides zero-trust encrypted east-west channels between GPU servers without consuming host CPU cycles. Secure boot attestation uses the DPU's hardware root of trust (a TPM or equivalent) to cryptographically verify that each host booted unmodified firmware and a known-good kernel image, providing a verifiable chain of custody for multi-tenant AI infrastructure.
 
 The DPU's network management port typically carries control and management traffic, completely isolated from the high-bandwidth GPU training rails.
 
@@ -562,7 +584,7 @@ sudo ovs-ofctl dump-flows br-dpdk | grep "priority=3\|priority=2[5]"
 
 ### Step 7 — Demonstrate Hardware Offload Concepts with PMD Stats
 
-Even without a physical offload-capable NIC, you can observe the DPDK PMD (Poll Mode Driver) statistics to understand how offload telemetry would appear on a real DPU:
+Even without a physical offload-capable NIC, you can observe the DPDK PMD (Poll Mode Driver — a user-space driver that continuously polls NIC hardware queues rather than waiting for interrupts, trading CPU cycles for deterministic low-latency packet processing) statistics to understand how offload telemetry would appear on a real DPU:
 
 ```bash
 # Show PMD thread statistics (shows which CPU cores are polling which ports)

@@ -36,13 +36,27 @@ uv pip install prometheus-client grpcio grpcio-tools protobuf pyyaml
 
 ---
 
+## Introduction
+
+Monitoring a thousand-node AI training cluster in real time is not an optional operational nicety — it is a prerequisite for maintaining training efficiency. A single congested switch port, a flapping BGP session, or a rising tail-drop rate on one of sixteen ECMP paths can silently stall a distributed all-reduce collective for hundreds of milliseconds, degrading GPU utilization across the entire job. Detecting and diagnosing these events requires telemetry at sub-second granularity, structured in a way that can be queried, alerted on, and visualized without vendor-specific parsing.
+
+gNMI (gRPC Network Management Interface) is the streaming telemetry protocol designed for this purpose. It runs over gRPC — Google's high-performance RPC framework built on HTTP/2 and Protocol Buffers — and uses the OpenConfig YANG path namespace introduced in Chapter 14 as its addressing scheme. Instead of the poll-based SNMP model where a management station asks each device for counters every five minutes, gNMI uses persistent subscription streams: the collector subscribes to a set of OpenConfig paths, and the device pushes updates at the specified interval or whenever a value changes. This inversion eliminates polling overhead on the device, reduces latency from minutes to seconds or less, and delivers structured, self-describing data.
+
+This chapter covers the gNMI protocol's four RPCs and subscription modes, the `gnmic` CLI and collector tool, the OpenConfig path namespace for interface counters, BGP state, and hardware telemetry, the complete production telemetry pipeline from switch to Grafana dashboard, and dial-out telemetry for firewall-constrained environments. PromQL expressions for AI cluster-specific monitoring — congestion detection, BGP session stability, ECMP imbalance — are derived from first principles.
+
+The lab walkthrough builds a complete end-to-end pipeline: a Containerlab SR Linux node generates live interface counters and BGP state change events; `gnmic` subscribes with both sampled and on-change modes; Prometheus scrapes the gnmic Prometheus endpoint; and a PromQL query computes real-time throughput in Gbps as iperf3 generates traffic. An on-change BGP subscription demonstrates how state transitions as short as 500 ms are captured reliably.
+
+This chapter closes Part V. Chapter 16 builds on the telemetry foundation established here by integrating gNMI metrics into a full-stack observability platform alongside OpenTelemetry traces, Prometheus alerting, and Grafana dashboards — adding the application-layer signals from AI training frameworks that sit above the network layer.
+
+---
+
 ## 15.1 From SNMP Polling to Streaming Telemetry
 
-SNMP was designed for 1990s network management: poll a device every 5 minutes, fetch a scalar counter, aggregate in an NMS. At AI cluster scale this fails in three ways:
+SNMP (Simple Network Management Protocol) was designed for 1990s network management: poll a device every 5 minutes, fetch a scalar counter, aggregate in an NMS (Network Management System — a centralized platform that collects, normalizes, and presents device health data). At AI cluster scale this fails in three ways:
 
 1. **Temporal resolution:** A congestion event that causes NCCL to stall for 500ms is invisible at 5-minute polling granularity.
 2. **CPU overhead on devices:** Each SNMP Get generates a context switch and encoding overhead. At high polling rates, this impacts the forwarding plane.
-3. **Opaque encoding:** SNMP OIDs require a MIB database for interpretation; vendor extensions are inconsistent.
+3. **Opaque encoding:** SNMP OIDs (Object Identifiers — numeric dotted-notation keys into the SNMP Management Information Base) require a MIB database for interpretation; vendor extensions are inconsistent.
 
 gNMI (gRPC Network Management Interface) addresses all three: subscriptions push data at sub-second intervals, the device encodes data once and streams it, and OpenConfig path strings are self-documenting.
 
@@ -50,7 +64,7 @@ gNMI (gRPC Network Management Interface) addresses all three: subscriptions push
 
 ## 15.2 gNMI Protocol
 
-gNMI runs over gRPC (HTTP/2 + Protocol Buffers) on port 57400. It defines four RPCs:
+gNMI runs over gRPC (Google Remote Procedure Call — a high-performance RPC framework using HTTP/2 for multiplexed transport and Protocol Buffers for compact binary serialization) on port 57400. It defines four RPCs:
 
 | RPC | Description |
 |---|---|
@@ -236,6 +250,7 @@ A production telemetry pipeline for a 1000-node AI cluster:
 
 ```
 [Switches (gNMI dial-in)]         [Hosts (Prometheus node_exporter)]
+# node_exporter: a Prometheus agent that exposes Linux host metrics (CPU, memory, disk, network) as a /metrics HTTP endpoint for Prometheus to scrape
          │                                    │
     gnmic collector                    Prometheus scrape
     (per datacenter row)
@@ -244,10 +259,14 @@ A production telemetry pipeline for a 1000-node AI cluster:
          │
     OpenTelemetry Collector
     (gNMI receiver → transform → export)
+    # OpenTelemetry Collector: a vendor-neutral agent/pipeline that can receive,
+    # process, and export telemetry (metrics, traces, logs) across multiple backends
          │
     ┌────┴──────────┐
     │   Prometheus  │   ← Prometheus remote_write
     │   VictoriaMetrics│ ← high-cardinality metrics
+    # VictoriaMetrics: a high-performance time-series database compatible with
+    # Prometheus remote_write and PromQL, optimized for very high label cardinality
     └────┬──────────┘
          │
     Grafana (dashboards)
@@ -266,6 +285,8 @@ gnmi_interface_state_counters_in_octets{source="leaf01",name="Ethernet4"} 9.8765
 ```
 
 ### PromQL for AI Cluster Monitoring
+
+PromQL (Prometheus Query Language) is the functional expression language for querying time-series stored in Prometheus. It supports rate calculations, aggregations, and arithmetic across labeled metric streams — the standard tool for building dashboards and alerting rules from telemetry data.
 
 ```promql
 # Interface utilization % (400G interface)

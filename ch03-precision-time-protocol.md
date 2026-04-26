@@ -44,13 +44,27 @@ which containerlab               # from containerlab install script
 
 ---
 
+## Introduction
+
+Precise clock synchronization is a silent prerequisite of the AI cluster network stack — one that only becomes visible when it is missing. When hundreds of GPU servers must coordinate collective operations, profile distributed training pipelines, and correlate telemetry events from NICs, switches, and the kernel, they must all share a common notion of time accurate to tens of nanoseconds. The technology that delivers this is the Precision Time Protocol (PTP), standardized as IEEE 1588.
+
+This chapter explains why NTP's millisecond accuracy is insufficient for AI cluster workloads, and how PTP achieves sub-microsecond synchronization by exploiting hardware timestamping at the NIC MAC layer. The core of PTP is a hierarchical clock architecture — Grandmaster, Boundary Clock, Transparent Clock, and Ordinary Clock — combined with a delay-request exchange that continuously estimates and corrects for asymmetric propagation delay. The Best Master Clock Algorithm (BMCA) provides automatic leader election, ensuring clusters survive grandmaster failures without manual intervention.
+
+We cover the practical Linux deployment of PTP through `linuxptp`, the canonical open-source implementation. The two central components — `ptp4l`, which disciplines the NIC's hardware clock (PHC) to the network master, and `phc2sys`, which copies that hardware clock into the system's CLOCK_REALTIME — are explained in detail along with their key configuration parameters and the PI servo behavior that governs convergence speed and stability.
+
+The chapter also addresses the interaction between PTP and `chrony` for hybrid NTP/PTP environments, the GPS/PPS-based grandmaster setup used in on-premises clusters, and the boundary-clock deployment pattern on top-of-rack switches that is standard in production AI fabrics. Understanding PTP is prerequisite for the congestion-control discussion in Chapter 2 (DCQCN ECN feedback relies on NIC hardware timestamps) and for the observability chapter (Chapter 16), where cross-host trace correlation requires synchronized clocks.
+
+The lab walkthrough builds a three-container PTP domain (Grandmaster → Boundary Clock → Ordinary Clock) using Containerlab, exercises the PI servo under injected path delay, and demonstrates grandmaster failover — all the failure scenarios most likely to degrade cluster timing in production.
+
+---
+
 ## 3.1 Why Timing Matters in AI Clusters
 
 Three separate requirements converge on the need for sub-microsecond clock synchronization across a GPU cluster:
 
 **1. AllReduce barrier correlation.** When profiling collective operations, engineers correlate NCCL timeline events across hundreds of hosts. Without synchronized clocks, a 10 ms skew makes it impossible to determine whether rank 42 was late to a barrier because of a network issue, a kernel scheduling hiccup, or a slow GPU kernel — the events appear to overlap when they don't.
 
-**2. RoCEv2 ECN timestamping.** DCQCN (Chapter 2) relies on the receiver NIC generating a CNP within one RTT of observing a CE-marked packet. If NIC hardware clocks diverge significantly, ECN feedback loops become incoherent — the rate controller overshoots or undershoots. Hardware timestamping (required for sub-microsecond accuracy) uses the NIC's internal PHC (PTP Hardware Clock), which must be disciplined to a common reference.
+**2. RoCEv2 ECN timestamping.** DCQCN (Chapter 2) relies on the receiver NIC generating a CNP within one RTT of observing a CE-marked packet. If NIC hardware clocks diverge significantly, ECN feedback loops become incoherent — the rate controller overshoots or undershoots. Hardware timestamping (required for sub-microsecond accuracy) uses the NIC's internal PHC (PTP Hardware Clock — a dedicated oscillator and counter inside the NIC that can be disciplined via PTP), which must be disciplined to a common reference.
 
 **3. Distributed log and trace correlation.** OpenTelemetry traces (Chapter 16) that span GPU compute, NIC events, and switch telemetry are useless for root-cause analysis if timestamps from different hosts differ by more than a few milliseconds. PTP brings that divergence to tens of nanoseconds.
 
@@ -76,7 +90,7 @@ PTP organizes clocks into a hierarchy:
 
 ### Clock Types
 
-- **Grandmaster (GM):** The root time source, typically disciplined by a GNSS receiver (GPS/PPS) or a cesium oscillator. Announces timing on all PTP ports.
+- **Grandmaster (GM):** The root time source, typically disciplined by a GNSS receiver (Global Navigation Satellite System — GPS, Galileo, GLONASS, or BeiDou) with a PPS (Pulse Per Second) output that provides a precise 1-Hz timing reference, or a cesium oscillator. Announces timing on all PTP ports.
 - **Boundary Clock (BC):** A switch or dedicated appliance that terminates PTP upstream (syncs to GM) and re-originates it downstream. Eliminates queuing delay jitter from the path.
 - **Transparent Clock (TC):** A switch that forwards PTP messages unchanged but adds a *residence time* correction field, accounting for the time the message spent queued inside the switch. Simpler than BC but less accurate.
 - **Ordinary Clock (OC):** A leaf (server/NIC) with a single PTP port. Either a master (GM) or slave (time recipient).
@@ -195,7 +209,8 @@ For on-premises AI clusters without access to a telecom-grade timing source:
 # Hardware needed: GPS receiver with PPS output (e.g., u-blox NEO-M8T)
 # Connected via serial + PPS to a dedicated timing server
 
-# gpsd reads NMEA sentences
+# gpsd reads NMEA sentences (National Marine Electronics Association serial sentences
+# encoding UTC time and position from a GPS receiver) and exposes them via a socket
 gpsd /dev/ttyS0 -F /var/run/gpsd.sock
 
 # ts2phc disciplines the NIC PHC to the PPS signal
@@ -258,7 +273,7 @@ Simpler to configure; Transparent Clock mode adds residence-time correction with
 
 ### Pattern 3: PTP Over Synchronous Ethernet (SyncE)
 
-Combines PTP (phase/time) with SyncE (frequency from the physical layer). SyncE distributes a frequency reference over the Ethernet physical layer independently of packets, allowing much tighter frequency tracking. Used in telco networks and some hyperscale AI deployments.
+Combines PTP (phase/time) with SyncE (Synchronous Ethernet — an ITU-T standard that recovers a frequency reference from the Ethernet PHY layer clock, distributed hop-by-hop across the physical layer independently of packet timing). SyncE distributes a frequency reference over the Ethernet physical layer independently of packets, allowing much tighter frequency tracking. Used in telco networks and some hyperscale AI deployments.
 
 ---
 
@@ -312,6 +327,7 @@ ls -la /dev/ptp*
 # Expected: /dev/ptp0  (or multiple if multiple NICs)
 
 # Read the current PHC time directly
+# phc_ctl is a linuxptp utility for directly reading and setting PHC device clocks
 phc_ctl /dev/ptp0 get
 # Expected: phc_ctl[...]: clock time is 1745280000.123456789, Thu Apr 22 ...
 ```
@@ -534,7 +550,7 @@ The `rms` field in the running ptp4l log is the most direct way to monitor conve
 
 ### Step 5 — Inject 10 ms netem Delay and Watch Servo Behavior
 
-`tc netem` (network emulator) adds artificial delay to an interface. We inject 10 ms on the link between GM and BC to simulate a degraded upstream path and observe how the PI servo on BC and OC reacts.
+`tc netem` (network emulator) is a Linux traffic-control queueing discipline that adds artificial delay, jitter, and loss to a network interface, making it possible to reproduce impaired network conditions in a lab without physical hardware. We inject 10 ms on the link between GM and BC to simulate a degraded upstream path and observe how the PI servo on BC and OC reacts.
 
 **On the BC container** (adding delay on eth1, the GM-facing interface):
 

@@ -41,6 +41,8 @@ cd nccl-tests && make CUDA_HOME=/usr/local/cuda MPI=0
 
 ```bash
 # Pull the NGC PyTorch image — includes NCCL with socket backend compiled in
+# NGC (NVIDIA GPU Cloud) is NVIDIA's container registry at nvcr.io providing pre-built,
+# performance-optimized containers for deep learning frameworks (PyTorch, TensorFlow, etc.)
 docker pull nvcr.io/nvidia/pytorch:24.01-py3
 
 # Create a dedicated Docker network for the two simulated ranks
@@ -58,6 +60,20 @@ uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cp
 # paramiko — used by optional remote-execution helper scripts
 uv pip install paramiko
 ```
+
+---
+
+## Introduction
+
+Every modern large-scale AI training job is fundamentally a distributed program: hundreds or thousands of GPU processes, each holding a shard of the model and a different batch of training data, must periodically synchronize their gradient computations before the optimizer can take a step. This synchronization — the AllReduce collective operation — is the most network-intensive workload in all of computing. A single AllReduce step for a 175-billion-parameter model in bfloat16 precision moves 350 GB of data across the training fabric. The frequency is one per optimizer step, and the entire GPU cluster stalls until the AllReduce completes. Every microsecond of additional latency, every dropped packet that triggers retransmission, every ECMP hash collision that leaves half the fabric idle while the other half is saturated — all translate directly into degraded GPU utilization and longer time-to-train.
+
+This chapter covers NCCL (NVIDIA Collective Communications Library), RCCL (AMD's drop-in equivalent for ROCm), and Intel oneCCL — but only from the perspective of what these libraries demand from and expose to the network fabric. The internal algorithms (ring-AllReduce, double-binary-tree), the PyTorch and Megatron-LM integration, and the optimizer step sequence are addressed in the companion investigation; here the focus is on the network engineer's questions: which NICs does NCCL select, how does it fall back between transports, what environment variables control fabric behavior, and how can the fabric operator diagnose a slow collective from the network side.
+
+A key architectural insight is that NCCL's transport is not hardwired. The plugin architecture allows NCCL to use libibverbs (for InfiniBand and RoCEv2), the UCX library (for any UCX-supported transport including shmem and CXL), or a TCP socket fallback — selected dynamically at initialization based on what hardware is available. This makes NCCL's fabric requirements both flexible and transparent: an operator can observe exactly which transport was selected from the initialization log and tune accordingly.
+
+SHARP (Scalable Hierarchical Aggregation and Reduction Protocol) represents the most aggressive fabric optimization available for InfiniBand clusters — offloading the AllReduce computation itself into the switch ASICs, reducing total fabric traffic by up to 330× for large collectives. Understanding when SHARP helps and what it requires from the switch infrastructure is essential for InfiniBand fabric design at scale.
+
+This chapter connects directly to Chapter 2 (RDMA/RoCEv2, on which the primary NCCL transport is built), Chapter 4 (UCX and libfabric, which back the UCX and oneCCL transports), Chapter 24 (InfiniBand fabric management, which covers SHARP switch configuration), and Chapter 20 (distributed training runtimes, which quantifies the AllReduce traffic patterns that NCCL generates at different levels of parallelism).
 
 ---
 
@@ -81,7 +97,7 @@ This is the *minimum* time given perfect fabric utilization. Any packet drop, EC
 1. Bandwidth: at least 90% of NIC line rate for large messages
 2. Latency: p99 < 10 µs for control messages that synchronize collective phases
 3. Loss-free operation: a single dropped packet causes RDMA retransmission, stalling the entire collective
-4. ECMP fairness: no hash collisions that leave some links idle while others are saturated
+4. ECMP fairness: no hash collisions that leave some links idle while others are saturated. ECMP (Equal-Cost Multi-Path) is the routing mechanism by which multiple parallel paths of equal cost are used to distribute traffic across a leaf-spine fabric; hash collisions occur when many flows hash to the same path, causing one link to be overloaded while adjacent links remain idle.
 
 ---
 
@@ -105,7 +121,7 @@ NCCL runtime
  └────────────────────────────────────────────────┘
 ```
 
-The UCX plugin allows NCCL to use any UCX-supported transport (IB, RoCE, shmem, CXL) without NCCL itself needing transport-specific code.
+`libibverbs` is the user-space InfiniBand verbs library — the standard RDMA programming API that both InfiniBand and RoCEv2 Ethernet expose to applications. It provides queue pair (QP) management, memory registration, and one-sided RDMA operations. The UCX plugin allows NCCL to use any UCX-supported transport (IB, RoCE, shmem, CXL) without NCCL itself needing transport-specific code. `HCA` (Host Channel Adapter) is the RDMA NIC used in InfiniBand and RoCEv2 deployments; NVIDIA Mellanox ConnectX series adapters are the dominant HCA in AI clusters, exposed to the OS as `mlx5_N` devices.
 
 ### Selecting the Transport
 
@@ -191,12 +207,12 @@ NCCL_TOPO_FILE=/etc/nccl/cluster_topo.xml
 
 **RCCL (AMD ROCm Collective Communications Library):**
 - API-compatible with NCCL; drop-in replacement for AMD MI-series GPUs
-- Uses ROCm communication fabric; HIP peer memory for GPU-direct equivalent
+- Uses ROCm communication fabric; HIP (Heterogeneous-computing Interface for Portability) is AMD's GPU programming API analogous to CUDA; HIP peer memory provides GPU-direct equivalent functionality — direct DMA transfers between AMD GPU memory and the RDMA NIC without staging through CPU DRAM
 - Plugin architecture mirrors NCCL; UCX and IB plugins work with the same environment variables
 
 **oneCCL (Intel oneAPI):**
 - Supports CPU and Intel GPU (Xe/Gaudi) collectives
-- Uses MPI or OFI (LibFabric) as the transport backend
+- Uses MPI or OFI (Open Fabric Interface — the LibFabric abstraction layer that provides a transport-agnostic API over InfiniBand verbs, RoCE, shmem, and other providers) as the transport backend
 - Less flexible plugin model than NCCL; configuration via CCL_ATL_TRANSPORT variable
 
 ```bash

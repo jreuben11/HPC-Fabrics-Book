@@ -73,9 +73,23 @@ python -c "import netmiko, paramiko, yaml; print('OK')"
 
 ---
 
+## Introduction
+
+Chapter 21 introduces Containerlab, the infrastructure-as-code tool that turns a network topology YAML file into a fully operational virtual lab running inside Docker containers. By the end of this chapter you will have deployed a GPU rail fabric with two spine switches, two rail-segregated top-of-rack switches, and dual-homed server containers — all wired with BGP eBGP sessions and verified end-to-end with iperf3 — and packaged that topology as a GitHub Actions CI job that runs on every pull request.
+
+The motivation is practical and urgent. AI cluster networking is complex enough that a mis-configured ACL, a BGP policy bug, or a mis-wired ECMP path can silently degrade AllReduce throughput by 10× without triggering any obvious alarm. The only way to catch these problems early is to test them in an environment that mirrors production as closely as possible, as early as possible — ideally before any config change merges. Containerlab makes that possible on a laptop.
+
+Chapter 20 described the fabric demands of distributed AI training: rail-optimized topology, lossless RDMA, sub-microsecond jitter budgets. This chapter builds the emulation environment in which those properties can be tested without production hardware. Chapter 22 extends that environment into a full CI/CD pipeline with static analysis and golden-diff validation; Chapter 23 covers simulation tools for the cases where emulation is insufficient.
+
+Containerlab achieves its simplicity by treating standard Docker containers as network nodes and Linux veth pairs as links. Each NOS image — Nokia SR Linux, SONiC-VS, FRR — runs in an unmodified Docker container; Containerlab wires the containers together at the network-namespace level and injects startup configuration files. The result is a reproducible, version-controlled, diff-reviewable network topology that boots in under two minutes and is torn down with a single command.
+
+The chapter builds from first principles: Section 21.1 establishes why infrastructure-as-code is necessary, Sections 21.2–21.5 dissect the YAML topology format and CLI, Sections 21.6–21.7 cover VM-based nodes and CI integration, and the Lab Walkthrough executes the full GPU rail fabric end-to-end with annotated expected output at every step.
+
+---
+
 ## 21.1 Infrastructure-as-Code for Network Labs
 
-The traditional approach to network lab work is to configure a topology by hand in a GUI (GNS3, EVE-NG), save it in a proprietary format, and share it as a file attachment. This is inherently unscalable: the topology is not version-controlled, changes are hard to review, and CI integration is nearly impossible.
+The traditional approach to network lab work is to configure a topology by hand in a GUI (GNS3, EVE-NG), save it in a proprietary format, and share it as a file attachment. GNS3 (Graphical Network Simulator-3) and EVE-NG (Emulated Virtual Environment Next Generation) are popular GUI-driven network emulation platforms that let operators drag-and-drop virtual routers and switches into a canvas topology, but they store their topology state in opaque files rather than text that can be version-controlled or executed in CI. This is inherently unscalable: the topology is not version-controlled, changes are hard to review, and CI integration is nearly impossible.
 
 Containerlab treats network topology as code. A YAML file describes nodes and links; `containerlab deploy` spins up the topology in seconds using Docker. The topology file can be committed to git, reviewed as a diff, and executed in a CI pipeline on every PR.
 
@@ -232,6 +246,8 @@ network-instance default:
 ```
 
 ### FRR Container as Host Router
+
+FRR (Free Range Routing) is an open-source IP routing suite that implements BGP, OSPF, ISIS, and other protocols on Linux; it is the successor to Quagga and is widely used in cloud and HPC environments. In Containerlab, an FRR container deployed as `kind: linux` acts as a fully-capable software router that peers with switch nodes via standard BGP sessions.
 
 ```yaml
 nodes:

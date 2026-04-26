@@ -107,6 +107,20 @@ ls /usr/local/aws-ofi-nccl/lib/
 
 ---
 
+## Introduction
+
+Chapter 25 examines what changes when an AI training cluster moves from on-premises hardware to cloud infrastructure — specifically what each of the three major cloud providers (AWS, Azure, GCP) exposes as their RDMA or near-RDMA networking layer, how those layers map to the verbs/libfabric/NCCL software stacks covered in earlier chapters, and how to configure and tune them for maximum AllReduce throughput. The Lab Walkthrough runs a libfabric provider smoke test, captures fabtests bandwidth numbers, and walks through the NCCL topology file workflow on a non-GPU lab host.
+
+The practical context is hard to ignore: as of 2025, a majority of large AI training runs happen in cloud rather than on dedicated on-premises clusters. The three providers take fundamentally different approaches. AWS EFA uses a custom RDMA-capable NIC with a libfabric abstraction that sidesteps standard IB verbs entirely. Azure NDv5 and HBv3 expose real Mellanox InfiniBand HCAs through SR-IOV, making the software stack nearly identical to on-premises IB — with the important caveat that the Subnet Manager and fabric routing are managed by Microsoft and invisible to tenants. GCP A3 uses GPUDirect-TCPX, a hybrid approach that provides NIC hardware DMA assist over standard TCP, trading some latency for the ability to span availability zones.
+
+Chapter 24 established the full on-premises IB management picture: OpenSM, LFTs, diagnostic tools, and PFC configuration. Chapter 25 builds on that foundation by showing which parts of the IB management stack disappear in cloud (SM, MAD access, firmware control) and which parts remain the operator's responsibility (NCCL environment variables, topology files, placement group selection, host-level RDMA driver tuning). Chapter 26 covers security for the same cloud fabrics.
+
+A key theme is that cloud RDMA abstraction layers are deep and provider-specific, but they converge at the NCCL interface: all three providers ultimately provide a `NCCL_NET` plugin that plugs into NCCL's network transport interface. Understanding that convergence point — the `ncclNet_v8_t` plugin ABI — makes it possible to reason about performance and portability across providers without understanding every layer of each provider's proprietary stack.
+
+Section 25.1 compares the on-prem and cloud networking models. Sections 25.2–25.4 cover EFA, Azure RDMA, and GPUDirect-TCPX in depth. Section 25.5 addresses cloud-specific NCCL tuning. Section 25.6 covers VPC design for multi-node AI clusters. Section 25.7 provides a cloud-versus-on-prem decision matrix.
+
+---
+
 ## 25.1 On-Prem vs Cloud AI Networking: What Changes
 
 Moving an AI training cluster from on-premises to cloud fundamentally changes the networking stack in three dimensions: hardware access, fabric management, and software configuration.
@@ -128,7 +142,7 @@ In cloud, the fabric is **managed**. AWS, Azure, and GCP operate the physical ne
 
 ### 25.1.2 Software Stack Differences
 
-Each cloud provider ships a customized software stack that replaces or extends the standard RDMA userspace:
+Each cloud provider ships a customized software stack that replaces or extends the standard RDMA userspace. `libfabric` (also called OFI, OpenFabrics Interfaces) is a vendor-neutral network communication library that abstracts different RDMA and high-speed network technologies behind a common API through pluggable "providers" (such as `efa` for AWS EFA, `verbs` for IB/RoCE, `tcp` for standard TCP); it was designed to avoid the IB-centrism of the original `libibverbs` API. `NCCL` (NVIDIA Collective Communications Library) is NVIDIA's GPU-optimized library for collective operations — AllReduce, AllGather, ReduceScatter, Broadcast — across GPUs; it detects available network transports via a pluggable `NCCL_NET` interface and handles topology-aware algorithm selection automatically.
 
 - **AWS:** `libfabric` with the `efa` provider replacing `libibverbs` for inter-instance RDMA; `aws-ofi-nccl` bridges NCCL to libfabric.
 - **Azure:** Standard `libibverbs` + Mellanox OFED (HBv3/NDv5 expose real IB HCAs); `hpc-x` is a pre-built MPI/NCCL stack optimized for Azure's IB fabric.
@@ -414,7 +428,10 @@ export NCCL_DEBUG_SUBSYS=NET,GRAPH,TUNING
 NCCL's automatic topology detection works well on-prem but can misidentify cloud VM topology (virtual NUMA, hidden PCIe hierarchy). A manually-generated topology XML improves collective algorithm selection:
 
 ```bash
-# Generate topology with hwloc (produces NCCL-compatible XML)
+# Generate topology with hwloc (hwloc is the Hardware Locality library; it
+# enumerates the physical topology of the machine — NUMA nodes, CPU cores,
+# PCIe buses, and attached devices — and exposes it as an XML file that NCCL
+# uses to determine which GPUs share a PCIe switch or NVLink domain)
 lstopo --output-format xml --whole-system > /tmp/nccl_topo.xml
 
 # Tell NCCL to use this file
