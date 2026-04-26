@@ -6,23 +6,21 @@
 
 ## Introduction
 
-AI compute clusters are, at their core, distributed memory systems in which network bandwidth and latency are as critical to performance as GPU compute throughput. This chapter establishes the architectural vocabulary and first-principles reasoning that every subsequent chapter builds upon. Understanding why the network is a first-class citizen of the AI training stack — not merely a plumbing detail — is the prerequisite for every design decision that follows.
+AI compute clusters are, at their core, distributed memory systems in which network bandwidth and latency are as critical to performance as **GPU** compute throughput. This chapter establishes the architectural vocabulary and first-principles reasoning that every subsequent chapter builds upon. Understanding why the network is a first-class citizen of the AI training stack — not merely a plumbing detail — is the prerequisite for every design decision that follows.
 
-We begin with the physical topology choices that practitioners face when building GPU clusters, from the classical fat-tree/Clos fabric to the rail-optimized variants now standard in production hyperscale deployments. These choices determine bisection bandwidth, ECMP hash collision risk, and the physical routing of collective traffic. Getting topology wrong at design time is expensive to correct; getting it right means the network becomes invisible during training, which is exactly what it should be.
+We begin with the physical topology choices that practitioners face when building **GPU** clusters, from the classical **fat-tree**/**Clos** fabric to the **rail-optimized** variants now standard in production hyperscale deployments. These choices determine bisection bandwidth, **ECMP** hash collision risk, and the physical routing of collective traffic. Getting topology wrong at design time is expensive to correct; getting it right means the network becomes invisible during training, which is exactly what it should be.
 
-The chapter then maps the three dominant parallelism strategies — data parallelism, pipeline parallelism, and tensor parallelism — to their distinct traffic signatures. Each parallelism type imposes different bandwidth, latency, and flow-count requirements on the fabric. A data-parallel AllReduce is an all-to-all barrier; pipeline parallelism is point-to-point and latency-dominated; tensor parallelism demands ultra-low latency within a small group, typically served by NVLink within a node. Designing a single fabric to serve all three simultaneously is the central engineering challenge of the AI cluster network.
+The chapter then maps the three dominant parallelism strategies — data parallelism, pipeline parallelism, and tensor parallelism — to their distinct traffic signatures. Each parallelism type imposes different bandwidth, latency, and flow-count requirements on the fabric. A data-parallel **AllReduce** is an all-to-all barrier; pipeline parallelism is point-to-point and latency-dominated; tensor parallelism demands ultra-low latency within a small group, typically served by **NVLink** within a node. Designing a single fabric to serve all three simultaneously is the central engineering challenge of the AI cluster network.
 
-We close with a quantitative bandwidth and latency reference table spanning NVLink through cross-fabric paths, and a layer-by-layer map of the full stack covered by this book. The lab walkthrough provisions a minimal two-spine, two-leaf fat-tree stub using Containerlab and SR Linux, then demonstrates ECMP path distribution using iperf3 — giving concrete, hands-on grounding for the topological concepts in the chapter.
+We close with a quantitative bandwidth and latency reference table spanning **NVLink** through cross-fabric paths, and a layer-by-layer map of the full stack covered by this book. The lab walkthrough provisions a minimal two-spine, two-leaf **fat-tree** stub using **Containerlab** and **SR Linux**, then demonstrates **ECMP** path distribution using **iperf3** — giving concrete, hands-on grounding for the topological concepts in the chapter.
 
-Adjacent chapters build directly on this foundation: Chapter 2 dives into the RDMA transport layer that carries collective traffic, Chapter 3 addresses clock synchronization across cluster nodes, and Chapter 4 covers the UCX/LibFabric abstraction libraries that sit between collective runtimes and the physical transport.
-
----
+Adjacent chapters build directly on this foundation: Chapter 2 dives into the **RDMA** transport layer that carries collective traffic, Chapter 3 addresses clock synchronization across cluster nodes, and Chapter 4 covers the **UCX**/**LibFabric** abstraction libraries that sit between collective runtimes and the physical transport.
 
 ---
 
 ## Installation
 
-This section installs Docker and Containerlab, which together provide the container runtime and topology orchestration engine needed to instantiate the fat-tree lab fabric. The SR Linux container image is pulled as the switch OS for each spine and leaf node, because it supports the ECMP-capable BGP and IP fabric configuration exercised in the walkthrough. The iperf3 package provides the traffic generation tool used to drive multi-flow load across the topology and observe how the fabric distributes flows across ECMP paths.
+This section installs **Docker** and **Containerlab**, which together provide the container runtime and topology orchestration engine needed to instantiate the **fat-tree** lab fabric. The **SR Linux** container image is pulled as the switch OS for each spine and leaf node, because it supports the **ECMP**-capable **BGP** and IP fabric configuration exercised in the walkthrough. The **iperf3** package provides the traffic generation tool used to drive multi-flow load across the topology and observe how the fabric distributes flows across **ECMP** paths.
 
 ### System Packages (Ubuntu 24.04)
 
