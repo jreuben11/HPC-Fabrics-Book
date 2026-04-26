@@ -1167,11 +1167,27 @@ sudo ip link del veth1
 
 ## References
 
-- P4 Language Consortium: p4.org
-- P4₁₆ specification: p4lang.github.io/p4-spec
-- P4Runtime specification: p4lang.github.io/p4runtime
-- Bosshart et al., *P4: Programming Protocol-Independent Packet Processors*, SIGCOMM CCR 2014
-- Sapio et al., *In-Network Computation is a Dumb Idea Whose Time Has Come*, HotNets 2017
+- [P4 Language Consortium](https://p4.org)
+- [P4₁₆ language specification](https://p4lang.github.io/p4-spec/)
+- [P4Runtime API specification](https://p4lang.github.io/p4runtime/)
+- [p4c — open-source P4 reference compiler](https://github.com/p4lang/p4c)
+- [bmv2 — behavioral-model v2 software P4 switch](https://github.com/p4lang/behavioral-model)
+- [Intel Tofino / P4 Studio (Intel)](https://www.intel.com/content/www/us/en/products/network-io/programmable-ethernet-switch.html)
+- [INT — In-band Network Telemetry specification (p4.org)](https://p4.org/p4-spec/docs/INT_v2_1.pdf)
+- [OpenFlow — ONF SDN protocol](https://opennetworking.org/sdn-resources/openflow/)
+- [OVS — Open vSwitch](https://www.openvswitch.org)
+- [OVN — Open Virtual Network](https://www.ovn.org)
+- [Ryu — Python SDN controller framework](https://ryu-sdn.org)
+- [ONOS — Open Network Operating System](https://onosproject.org)
+- [OpenDaylight (ODL) — Linux Foundation SDN controller](https://www.opendaylight.org)
+- [Cilium — eBPF-based Kubernetes CNI](https://cilium.io)
+- [NVIDIA SHARP — in-network computing for InfiniBand](https://developer.nvidia.com/networking/sharp)
+- [CORD — ONF Central Office Re-architected as a Datacenter](https://opennetworking.org/cord/)
+- [gRPC — high-performance RPC framework](https://grpc.io)
+- [Protocol Buffers (protobuf)](https://protobuf.dev)
+- [Scapy — Python packet manipulation library](https://scapy.net)
+- Bosshart et al., *P4: Programming Protocol-Independent Packet Processors*, SIGCOMM CCR 2014 — [dl.acm.org/doi/10.1145/2656877.2656890](https://dl.acm.org/doi/10.1145/2656877.2656890)
+- Sapio et al., *In-Network Computation is a Dumb Idea Whose Time Has Come*, HotNets 2017 — [dl.acm.org/doi/10.1145/3152434.3152461](https://dl.acm.org/doi/10.1145/3152434.3152461)
 
 
 ---

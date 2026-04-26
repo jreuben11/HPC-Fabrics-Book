@@ -675,10 +675,18 @@ grep HugePages_Total /proc/meminfo
 
 ## References
 
-- DPDK documentation: doc.dpdk.org
-- DPDK Performance Report: core.dpdk.org/perf-report/
-- Rizzo, L., *netmap: a novel framework for fast packet I/O*, USENIX ATC 2012
-- pfring, DPDK, and netmap comparative analysis: ntop.org
+- [DPDK Documentation](https://doc.dpdk.org) — Data Plane Development Kit library and PMD reference
+- [DPDK Performance Report](https://core.dpdk.org/perf-report/) — official DPDK release throughput benchmarks
+- [DPDK testpmd](https://doc.dpdk.org/guides/testpmd_app_ug/) — DPDK built-in packet generator and test application
+- [Pktgen-DPDK](https://github.com/pktgen/Pktgen-DPDK) — DPDK-based traffic generator for line-rate packet generation
+- Rizzo, L., *netmap: a novel framework for fast packet I/O*, USENIX ATC 2012 — [usenix.org/conference/atc12/.../rizzo](https://www.usenix.org/conference/atc12/technical-sessions/presentation/rizzo)
+- [pfring / nDPI / ntopng](https://www.ntop.org/products/packet-capture/pf_ring/) — high-speed packet capture library (ntop.org comparative analysis)
+- [Open vSwitch (OVS)](https://www.openvswitch.org/support/dist-docs/) — virtual switch with DPDK data plane (OVS-DPDK)
+- [vfio-pci](https://www.kernel.org/doc/html/latest/driver-api/vfio.html) — kernel framework for safe user-space DMA with IOMMU isolation
+- [iproute2](https://wiki.linuxfoundation.org/networking/iproute2) — Linux network configuration (ip link, tc) used for veth pair setup
+- [NVIDIA ConnectX NICs](https://www.nvidia.com/en-us/networking/ethernet-adapters/) — ConnectX-6/7 NIC supported by the mlx5 DPDK PMD
+- [NVIDIA BlueField DPU](https://www.nvidia.com/en-us/networking/products/data-processing-unit/) — SmartNIC/DPU running OVS-DPDK on ARM cores
+- [eBPF / XDP](https://ebpf.io/docs/) — kernel-integrated alternative to DPDK for some kernel-bypass workloads
 
 
 ---

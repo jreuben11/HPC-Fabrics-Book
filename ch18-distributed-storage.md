@@ -1264,13 +1264,21 @@ echo "Cleanup complete."
 
 ## References
 
-- Ceph documentation: docs.ceph.com
-- Lustre documentation: doc.lustre.org
-- DAOS documentation: docs.daos.io
-- MinIO documentation: min.io/docs
-- WEKA documentation: docs.weka.io
-- WekaIO GPUDirect Storage integration guide: docs.weka.io/usage/gpudirect-storage
-- Weil, S.A. et al., *Ceph: A Scalable, High-Performance Distributed File System*, OSDI 2006
+- [Ceph documentation](https://docs.ceph.com)
+- [RADOS (Reliable Autonomic Distributed Object Store)](https://docs.ceph.com/en/latest/rados/)
+- [Lustre filesystem](https://www.lustre.org)
+- [DAOS documentation](https://docs.daos.io)
+- [SPDK (Storage Performance Development Kit)](https://spdk.io/doc/)
+- [MinIO documentation](https://min.io/docs)
+- [WekaFS documentation](https://www.weka.io/resources/)
+- [NFS RFC 7530](https://datatracker.ietf.org/doc/html/rfc7530)
+- [UCX (Unified Communication X)](https://openucx.org)
+- [DPDK (Data Plane Development Kit)](https://doc.dpdk.org/guides/)
+- [boto3 (AWS SDK for Python)](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
+- [s3fs (S3 filesystem interface for Python)](https://s3fs.readthedocs.io)
+- [fio (Flexible I/O Tester)](https://fio.readthedocs.io)
+- [GPFS / IBM Spectrum Scale](https://www.ibm.com/docs/en/spectrum-scale)
+- Weil, S.A. et al., *Ceph: A Scalable, High-Performance Distributed File System*, OSDI 2006 — [usenix.org/osdi06/tech/weil.html](https://www.usenix.org/conference/osdi-06/ceph-scalable-high-performance-distributed-file-system)
 
 
 ---

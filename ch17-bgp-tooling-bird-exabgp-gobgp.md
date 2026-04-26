@@ -898,10 +898,12 @@ ip netns list   # should be empty (or not contain ns-bird / ns-gobgp)
 
 ## References
 
-- BIRD documentation: bird.network.cz
-- ExaBGP: github.com/Exa-Networks/exabgp
-- GoBGP: github.com/osrg/gobgp
-- Cilium BGP Control Plane (uses BIRD): docs.cilium.io/en/stable/network/bgp-control-plane/
+- [BIRD Internet Routing Daemon](https://bird.network.cz)
+- [ExaBGP](https://github.com/Exa-Networks/exabgp)
+- [GoBGP](https://osrg.github.io/gobgp/)
+- [FRRouting (FRR)](https://frrouting.org)
+- [Cilium BGP Control Plane (uses BIRD)](https://docs.cilium.io/en/stable/network/bgp-control-plane/)
+- [gRPC](https://grpc.io/docs/)
 
 
 ---

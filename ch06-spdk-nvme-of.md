@@ -729,10 +729,19 @@ pgrep -l nvmf_tgt spdk_tgt
 
 ## References
 
-- SPDK documentation: spdk.io/doc
-- NVMe-oF specification: nvmexpress.org/specifications
-- Yang et al., *SPDK: A Development Kit for High-Performance Storage*, IEEE CloudCom 2017
-- io_uring documentation: kernel.dk/io_uring.pdf
+- [SPDK documentation](https://spdk.io/doc/)
+- [NVMe-oF specification (NVM Express)](https://nvmexpress.org/developers/nvme-of-specification/)
+- [SPDK GitHub repository](https://github.com/spdk/spdk)
+- [nvme-cli (Linux NVMe management CLI)](https://github.com/linux-nvme/nvme-cli)
+- [libaio — Linux kernel AIO interface](https://pagure.io/libaio)
+- [liburing — io_uring userspace library](https://github.com/axboe/liburing)
+- [fio — Flexible I/O Tester](https://github.com/axboe/fio)
+- [io_uring documentation (Axboe)](https://kernel.dk/io_uring.pdf)
+- [VFIO — Virtual Function I/O (kernel docs)](https://docs.kernel.org/driver-api/vfio.html)
+- [paramiko — Python SSH library](https://www.paramiko.org)
+- [RocksDB — Facebook's log-structured KV store](https://rocksdb.org)
+- [PyTorch — async checkpoint (PyTorch docs)](https://pytorch.org/docs/stable/checkpoint.html)
+- Yang et al., *SPDK: A Development Kit for High-Performance Storage*, IEEE CloudCom 2017 — [ieeexplore.ieee.org/document/8241090](https://ieeexplore.ieee.org/document/8241090)
 
 
 ---

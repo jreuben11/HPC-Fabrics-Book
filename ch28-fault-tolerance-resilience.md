@@ -1210,15 +1210,22 @@ rm -f bfd-lab.yaml spine1-frr.conf leaf1-frr.conf leaf2-frr.conf \
 
 ## References
 
-- RFC 5880: Bidirectional Forwarding Detection (BFD) — datatracker.ietf.org/doc/html/rfc5880
-- FRR BFD documentation: docs.frrouting.org/en/stable/bfd.html
-- PyTorch Elastic Training: pytorch.org/docs/stable/elastic/run.html
-- NCCL environment variables: docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html
-- rdma-core and libibverbs: github.com/linux-rdma/rdma-core
-- DMTCP: dmtcp.sourceforge.io
-- Mellanox PFC watchdog: community.mellanox.com/s/article/understanding-pfc-storm-on-roce
-- Prometheus alerting rules: prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
-- OpenConfig BFD YANG model: github.com/openconfig/public/tree/master/release/models/bfd
+- [RFC 5880 — Bidirectional Forwarding Detection (BFD)](https://datatracker.ietf.org/doc/html/rfc5880)
+- [FRRouting (FRR)](https://frrouting.org)
+- [FRR BFD documentation](https://docs.frrouting.org/en/stable/bfd.html)
+- [PyTorch Elastic Training (torchrun)](https://pytorch.org/docs/stable/elastic/run.html)
+- [NCCL environment variables](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html)
+- [rdma-core and libibverbs](https://github.com/linux-rdma/rdma-core)
+- [perftest — RDMA performance test utilities](https://github.com/linux-rdma/perftest)
+- [DMTCP — Distributed MultiThreaded CheckPointing](https://dmtcp.sourceforge.io)
+- [Mellanox PFC Watchdog (PFC storm on RoCE)](https://community.mellanox.com/s/article/understanding-pfc-storm-on-roce)
+- [Prometheus alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
+- [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/)
+- [prometheus_client — Python Prometheus client](https://github.com/prometheus/client_python)
+- [gnmic — gNMI client CLI](https://gnmic.openconfig.net)
+- [OpenConfig BFD YANG model](https://github.com/openconfig/public/tree/master/release/models/bfd)
+- [paramiko — Python SSH2 library](https://www.paramiko.org)
+- [Containerlab](https://containerlab.dev)
 
 
 ---

@@ -1346,16 +1346,20 @@ echo "Cleanup complete."
 
 ## References
 
-- Dixit, A. et al., "On the Impact of Packet Spraying in Data Center Networks", IEEE INFOCOM 2013
-- Alizadeh, M. et al., "CONGA: Distributed Congestion-Aware Load Balancing for Data Centers", ACM SIGCOMM 2014
-- Katta, N. et al., "Clove: Congestion-aware Load Balancing at the Virtual Edge", ACM CoNEXT 2017
-- NVIDIA Spectrum Adaptive Routing: docs.nvidia.com/networking/display/SONiCAdaptiveRouting
-- Flowlet switching in SONIC: github.com/sonic-net/sonic-swss/blob/master/doc/FlowletSwitching.md
-- SRv6 Network Programming: RFC 8986 (Filsfils et al., IETF 2021)
-- FRR SRv6 documentation: docs.frrouting.org/en/latest/srmpls.html#srv6
-- BGP Link Bandwidth extended community: RFC 7311 (Mohapatra et al., IETF 2014)
-- Containerlab documentation: containerlab.dev/manual/topo-def-file/
-- DCQCN: Zhu, Y. et al., "Congestion Control for Large-Scale RDMA Deployments", ACM SIGCOMM 2015
+- Dixit, A. et al., "On the Impact of Packet Spraying in Data Center Networks", IEEE INFOCOM 2013 — [ieeexplore.ieee.org/document/6566899](https://ieeexplore.ieee.org/document/6566899)
+- Alizadeh, M. et al., "CONGA: Distributed Congestion-Aware Load Balancing for Data Centers", ACM SIGCOMM 2014 — [dl.acm.org/doi/10.1145/2619239.2626316](https://dl.acm.org/doi/10.1145/2619239.2626316)
+- Katta, N. et al., "Clove: Congestion-aware Load Balancing at the Virtual Edge", ACM CoNEXT 2017 — [dl.acm.org/doi/10.1145/3143361.3143373](https://dl.acm.org/doi/10.1145/3143361.3143373)
+- [NVIDIA Spectrum Adaptive Routing](https://docs.nvidia.com/networking/display/SONiCAdaptiveRouting)
+- [Flowlet switching in SONiC](https://github.com/sonic-net/sonic-swss/blob/master/doc/FlowletSwitching.md)
+- [RFC 8986 — SRv6 Network Programming](https://datatracker.ietf.org/doc/html/rfc8986) — Filsfils et al., IETF 2021
+- [RFC 8754 — IPv6 Segment Routing Header (SRH)](https://datatracker.ietf.org/doc/html/rfc8754)
+- [RFC 7311 — BGP Link Bandwidth extended community](https://datatracker.ietf.org/doc/html/rfc7311) — Mohapatra et al., IETF 2014
+- [FRR SRv6 documentation](https://docs.frrouting.org/en/latest/srmpls.html#srv6)
+- [FRRouting (FRR)](https://frrouting.org)
+- [SONiC (Software for Open Networking in the Cloud)](https://sonic-net.github.io/SONiC/)
+- [Containerlab documentation](https://containerlab.dev/manual/topo-def-file/)
+- [Scapy — Python packet crafting library](https://scapy.readthedocs.io/en/latest/)
+- Zhu, Y. et al., "Congestion Control for Large-Scale RDMA Deployments" (DCQCN), ACM SIGCOMM 2015 — [dl.acm.org/doi/10.1145/2829988.2787510](https://dl.acm.org/doi/10.1145/2829988.2787510)
 
 
 ---

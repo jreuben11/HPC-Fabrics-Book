@@ -1412,10 +1412,27 @@ cat test-results.xml | grep -E 'tests=|failures=|errors='
 
 ## References
 
-- Batfish documentation: batfish.readthedocs.io
-- pyATS / Genie documentation: developer.cisco.com/docs/pyats
-- Nornir documentation: nornir.readthedocs.io
-- pybatfish examples: github.com/batfish/pybatfish/tree/master/jupyter_notebooks
+- [Batfish](https://www.batfish.org)
+- [pybatfish (Python client)](https://github.com/batfish/pybatfish)
+- [pybatfish Jupyter notebook examples](https://github.com/batfish/pybatfish/tree/master/jupyter_notebooks)
+- [pyATS documentation](https://developer.cisco.com/docs/pyats/)
+- [Genie (pyATS parsing library)](https://developer.cisco.com/docs/genie-docs/)
+- [Nornir documentation](https://nornir.readthedocs.io)
+- [nornir-netmiko](https://github.com/nornir-automation/nornir-netmiko)
+- [nornir-utils](https://github.com/nornir-automation/nornir-utils)
+- [nornir-jinja2](https://github.com/nornir-automation/nornir-jinja2)
+- [Netmiko](https://ktbyers.github.io/netmiko/)
+- [paramiko](https://www.paramiko.org)
+- [Jinja2](https://jinja.palletsprojects.com)
+- [deepdiff](https://zepworks.com/deepdiff/current/)
+- [pytest](https://docs.pytest.org)
+- [pytest-html](https://pytest-html.readthedocs.io)
+- [Containerlab](https://containerlab.dev)
+- [Docker](https://docs.docker.com)
+- [GitHub Actions](https://docs.github.com/en/actions)
+- [SR Linux (Nokia)](https://learn.srlinux.dev)
+- [SONiC Foundation](https://sonicfoundation.dev)
+- [uv (Python package manager)](https://docs.astral.sh/uv/)
 
 
 ---

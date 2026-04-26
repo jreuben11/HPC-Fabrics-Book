@@ -787,10 +787,19 @@ lsmod | grep rdma_rxe
 
 ## References
 
-- Kalia et al., *Design Guidelines for High Performance RDMA Systems*, USENIX ATC 2016
-- Zhu et al., *Congestion Control for Large-Scale RDMA Deployments (DCQCN)*, SIGCOMM 2015
-- `rdma-core` documentation: github.com/linux-rdma/rdma-core
-- NVIDIA MLNX_OFED documentation: docs.nvidia.com/networking/
+- Kalia et al., *Design Guidelines for High Performance RDMA Systems*, USENIX ATC 2016 — [usenix.org/conference/atc16/.../kalia](https://www.usenix.org/conference/atc16/technical-sessions/presentation/kalia)
+- Zhu et al., *Congestion Control for Large-Scale RDMA Deployments (DCQCN)*, SIGCOMM 2015 — [doi.org/10.1145/2785956.2787484](https://doi.org/10.1145/2785956.2787484)
+- [libibverbs / rdma-core](https://github.com/linux-rdma/rdma-core) — Linux RDMA userspace stack (libibverbs, librdmacm, rdma-utils)
+- [MLNX_OFED](https://docs.nvidia.com/networking/display/mlnxofedv24) — NVIDIA Mellanox OpenFabrics Enterprise Distribution drivers
+- [perftest](https://github.com/linux-rdma/perftest) — RDMA performance benchmark suite (ib_write_bw, ib_read_lat, etc.)
+- [NCCL](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/) — NVIDIA Collective Communications Library
+- [UCX](https://openucx.org) — Unified Communication X transport abstraction
+- [GPUDirect RDMA](https://docs.nvidia.com/cuda/gpudirect-rdma/) — NVIDIA technology for direct NIC-to-GPU memory transfers
+- [NVIDIA DOCA SDK](https://docs.nvidia.com/doca/) — NVIDIA data-center infrastructure SDK for BlueField DPUs
+- [SONiC](https://sonic-net.github.io/SONiC/) — open-source network operating system (ECN/WRED configuration)
+- [iproute2](https://wiki.linuxfoundation.org/networking/iproute2) — Linux network configuration utilities (ip, tc, rdma subcommands)
+- [pyverbs](https://github.com/linux-rdma/rdma-core/tree/master/pyverbs) — Python bindings to libibverbs (part of rdma-core)
+- [Soft-RoCE (rdma_rxe)](https://www.kernel.org/doc/html/latest/infiniband/rxe.html) — software RoCEv2 implementation over standard Ethernet NICs
 
 
 ---

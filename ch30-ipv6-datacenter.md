@@ -1404,17 +1404,22 @@ echo "Lab cleanup complete."
 
 ## References
 
-- RFC 4291: IP Version 6 Addressing Architecture (IETF)
-- RFC 4862: IPv6 Stateless Address Autoconfiguration (IETF)
-- RFC 4291: IPv6 Addressing Architecture (IETF)
-- FRRouting documentation: docs.frrouting.org
-- Cilium dual-stack documentation: docs.cilium.io/en/stable/network/kubernetes/ipam/
-- SR Linux documentation: documentation.nokia.com/srlinux/
-- Nokia SR Linux BGP Configuration Guide
-- Containerlab documentation: containerlab.dev
-- InfiniBand Architecture Supplement for RoCE v2 — IBTA
-- IEEE 1588-2019 Precision Time Protocol
-- NCCL documentation: docs.nvidia.com/deeplearning/nccl/
+- [RFC 4291 — IP Version 6 Addressing Architecture](https://datatracker.ietf.org/doc/html/rfc4291)
+- [RFC 4862 — IPv6 Stateless Address Autoconfiguration (SLAAC)](https://datatracker.ietf.org/doc/html/rfc4862)
+- [RFC 4861 — Neighbor Discovery for IPv6](https://datatracker.ietf.org/doc/html/rfc4861)
+- [RFC 8200 — Internet Protocol Version 6 (IPv6) Specification](https://datatracker.ietf.org/doc/html/rfc8200)
+- [RFC 7432 — BGP MPLS-Based Ethernet VPN (EVPN)](https://datatracker.ietf.org/doc/html/rfc7432)
+- [FRRouting (FRR)](https://frrouting.org)
+- [FRRouting documentation](https://docs.frrouting.org)
+- [Cilium dual-stack documentation](https://docs.cilium.io/en/stable/network/kubernetes/ipam/)
+- [SR Linux documentation](https://documentation.nokia.com/srlinux/)
+- [Containerlab](https://containerlab.dev)
+- [radvd — Router Advertisement Daemon](https://radvd.litech.org)
+- [ndisc6 — IPv6 Neighbor Discovery tools](https://www.remlab.net/ndisc6/)
+- [Scapy — Python packet crafting library](https://scapy.readthedocs.io/en/latest/)
+- [NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/)
+- [InfiniBand Architecture Supplement for RoCE v2 — IBTA](https://www.infinibandta.org/ibta-specification/)
+- [IEEE 1588-2019 Precision Time Protocol](https://standards.ieee.org/ieee/1588/6825/)
 
 
 ---

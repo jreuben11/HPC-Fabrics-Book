@@ -857,10 +857,23 @@ sudo ovs-vsctl show
 
 ## References
 
-- NVIDIA DOCA documentation: docs.nvidia.com/doca
-- BlueField-3 product brief: nvidia.com/en-us/networking/products/data-processing-unit
-- P4 Portable NIC Architecture: p4.org/p4-spec/docs/PNA-working-draft.html
-- OVS hardware offload documentation: docs.openvswitch.org/en/latest/topics/dpdk/hw-offload/
+- [NVIDIA DOCA SDK documentation](https://docs.nvidia.com/doca/sdk/)
+- [NVIDIA DOCA GitHub samples](https://github.com/NVIDIA/doca-samples)
+- [BlueField-3 DPU — NVIDIA product page](https://www.nvidia.com/en-us/networking/products/data-processing-unit/)
+- [P4 Portable NIC Architecture (PNA) specification](https://p4.org/p4-spec/docs/PNA-working-draft.html)
+- [OVS hardware offload (OVS-DPDK) documentation](https://docs.openvswitch.org/en/latest/topics/dpdk/hw-offload/)
+- [OVS — Open vSwitch](https://www.openvswitch.org)
+- [DPDK — Data Plane Development Kit](https://www.dpdk.org)
+- [Netronome Agilio SmartNIC](https://www.netronome.com/products/agilio-cx/)
+- [AMD Pensando DSC SmartNIC](https://www.amd.com/en/products/accelerators/pensando.html)
+- [Marvell OCTEON DPU](https://www.marvell.com/products/data-processing-units.html)
+- [Intel Tofino / P4 Studio](https://www.intel.com/content/www/us/en/products/network-io/programmable-ethernet-switch.html)
+- [SR-IOV — PCI-SIG specification](https://pcisig.com/specifications)
+- [vhost-user protocol specification (QEMU docs)](https://qemu-project.gitlab.io/qemu/interop/vhost-user.html)
+- [virtio — paravirtualized I/O standard (OASIS spec)](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html)
+- [GPUDirect RDMA — NVIDIA developer documentation](https://developer.nvidia.com/gpudirect)
+- [IPsec — RFC 4301 (IETF)](https://www.rfc-editor.org/rfc/rfc4301)
+- [NVIDIA SHARP — in-network computing](https://developer.nvidia.com/networking/sharp)
 
 
 ---

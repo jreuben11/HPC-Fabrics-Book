@@ -1028,13 +1028,22 @@ echo "Cleanup complete"
 
 ## References
 
-- OpenFabrics Alliance, *OpenSM User Manual*, github.com/linux-rdma/opensm
-- Mellanox (NVIDIA), *InfiniBand Network Diagnostics Reference*, docs.nvidia.com/networking/
-- IEEE 802.1Qbb — Priority-based Flow Control
-- Pfister, G.F., *An Introduction to the InfiniBand Architecture*, High Performance Mass Storage and Parallel I/O, 2001
-- de Sensi et al., *A Comprehensive Analysis of InfiniBand Congestion Control*, IEEE IPDPS 2019
-- `rdma-core` upstream: github.com/linux-rdma/rdma-core
-- `infiniband-diags` man pages: `man ibnetdiscover`, `man ibdiagnet`, `man perfquery`
+- [OpenSM Subnet Manager](https://linux.die.net/man/8/opensm)
+- [OpenSM source (linux-rdma)](https://github.com/linux-rdma/opensm)
+- [rdma-core (libibverbs, ibverbs-utils)](https://github.com/linux-rdma/rdma-core)
+- [ibutils2 (Mellanox diagnostics)](https://github.com/Mellanox/ibutils2)
+- [OFED / MLNX_OFED](https://docs.nvidia.com/networking/display/mlnxofedv24)
+- [UFM (Unified Fabric Manager)](https://docs.nvidia.com/networking/display/UFMEnterpriseUFMAppliance)
+- [InfiniBand diagnostic tools (ibdiagnet, ibtracert, perfquery)](https://docs.nvidia.com/networking/display/ofedv522040)
+- [perftest (RDMA performance benchmarks)](https://github.com/linux-rdma/perftest)
+- [Soft-IB / rdma_rxe kernel module](https://github.com/linux-rdma/rdma-core/tree/master/kernel-headers)
+- [RoCEv2 (RDMA over Converged Ethernet)](https://www.infinibandta.org/roce/)
+- [IEEE 802.1Qbb — Priority-based Flow Control](https://standards.ieee.org/ieee/802.1Qbb/4selfpass/)
+- [SONiC Foundation](https://sonicfoundation.dev)
+- [Prometheus (prometheus_client)](https://prometheus.io/docs/introduction/overview/)
+- [Wireshark](https://www.wireshark.org)
+- Pfister, G.F., *An Introduction to the InfiniBand Architecture*, High Performance Mass Storage and Parallel I/O, 2001 — [doi.org/10.1016/B978-012651871-7/50022-4](https://doi.org/10.1016/B978-012651871-7/50022-4)
+- de Sensi et al., *A Comprehensive Analysis of InfiniBand Congestion Control*, IEEE IPDPS 2019 — [ieeexplore.ieee.org/document/8820989](https://ieeexplore.ieee.org/document/8820989)
 
 
 ---

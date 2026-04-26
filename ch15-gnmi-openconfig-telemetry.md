@@ -794,10 +794,24 @@ sudo containerlab destroy -t srl-lab.yaml
 
 ## References
 
-- gNMI specification: openconfig.net/docs/gnmi/gnmi-specification
-- gnmic documentation: gnmic.openconfig.net
-- OpenConfig models: openconfig.net/projects/models
-- IETF RFC 9254: YANG-Push — datatracker.ietf.org/doc/html/rfc9254
+- [RFC 8641: YANG-Push](https://datatracker.ietf.org/doc/html/rfc8641)
+- [gNMI specification](https://openconfig.net/docs/gnmi/gnmi-specification/)
+- [gNMI spec (GitHub)](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md)
+- [gnmic documentation](https://gnmic.openconfig.net)
+- [OpenConfig](https://openconfig.net)
+- [OpenConfig YANG models](https://openconfig.net/projects/models)
+- [Containerlab](https://containerlab.dev)
+- [SR Linux](https://learn.srlinux.dev)
+- [Prometheus](https://prometheus.io)
+- [Grafana](https://grafana.com)
+- [InfluxDB](https://docs.influxdata.com/influxdb/)
+- [VictoriaMetrics](https://victoriametrics.com)
+- [OpenTelemetry](https://opentelemetry.io)
+- [gRPC](https://grpc.io)
+- [Protocol Buffers](https://protobuf.dev)
+- [Apache Kafka](https://kafka.apache.org)
+- [Prometheus node_exporter](https://github.com/prometheus/node_exporter)
+- [iperf3](https://iperf.fr)
 
 
 ---

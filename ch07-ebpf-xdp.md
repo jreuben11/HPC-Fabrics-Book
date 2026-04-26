@@ -985,11 +985,23 @@ ip link show type veth
 
 ## References
 
-- libbpf documentation: libbpf.readthedocs.io
-- XDP tutorial: github.com/xdp-project/xdp-tutorial
-- Hoiland-Jorgensen et al., *The eXpress Data Path*, CoNEXT 2018
-- Katran: github.com/facebookincubator/katran
-- Gregg, B., *BPF Performance Tools*, Addison-Wesley 2019
+- [eBPF.io — official eBPF documentation hub](https://ebpf.io)
+- [libbpf — canonical userspace BPF loading library](https://libbpf.readthedocs.io)
+- [libbpf GitHub repository](https://github.com/libbpf/libbpf)
+- [bpftool — BPF object introspection utility](https://github.com/libbpf/bpftool)
+- [XDP tutorial (xdp-project)](https://github.com/xdp-project/xdp-tutorial)
+- [AF_XDP — kernel documentation](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)
+- [Katran — Meta's XDP load balancer](https://github.com/facebookincubator/katran)
+- [Cilium — eBPF-based Kubernetes CNI](https://cilium.io)
+- [bcc — BPF Compiler Collection (iovisor)](https://github.com/iovisor/bcc)
+- [clang/LLVM — compiler toolchain required for BPF compilation](https://llvm.org)
+- [iproute2 — Linux networking utilities (tc, ip)](https://wiki.linuxfoundation.org/networking/iproute2)
+- [pyroute2 — Python netlink library](https://pyroute2.org)
+- [Scapy — Python packet manipulation library](https://scapy.net)
+- [DPDK — Data Plane Development Kit](https://www.dpdk.org)
+- [NCCL — NVIDIA Collective Communications Library](https://github.com/NVIDIA/nccl)
+- Hoiland-Jorgensen et al., *The eXpress Data Path*, CoNEXT 2018 — [dl.acm.org/doi/10.1145/3281411.3281443](https://dl.acm.org/doi/10.1145/3281411.3281443)
+- Gregg, B., *BPF Performance Tools*, Addison-Wesley 2019 — [brendangregg.com/bpf-performance-tools-book.html](https://www.brendangregg.com/bpf-performance-tools-book.html)
 
 
 ---

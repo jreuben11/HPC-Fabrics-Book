@@ -873,11 +873,18 @@ sudo systemctl stop prometheus-node-exporter   # optional — re-enable with 'st
 
 ## References
 
-- OpenTelemetry documentation: opentelemetry.io/docs
-- Prometheus documentation: prometheus.io/docs
-- DCGM exporter: github.com/NVIDIA/dcgm-exporter
-- Grafana documentation: grafana.com/docs
-- Telegraf documentation: docs.influxdata.com/telegraf
+- [OpenTelemetry documentation](https://opentelemetry.io/docs/)
+- [OTLP specification](https://opentelemetry.io/docs/specs/otlp/)
+- [Prometheus documentation](https://prometheus.io/docs/)
+- [OpenMetrics specification](https://openmetrics.io)
+- [Grafana documentation](https://grafana.com/docs/)
+- [Grafana Loki](https://grafana.com/docs/loki/)
+- [Grafana Tempo](https://grafana.com/docs/tempo/)
+- [Jaeger distributed tracing](https://www.jaegertracing.io/docs/)
+- [DCGM exporter](https://github.com/NVIDIA/dcgm-exporter)
+- [Telegraf documentation](https://docs.influxdata.com/telegraf)
+- [Cilium Hubble](https://docs.cilium.io/en/stable/observability/hubble/)
+- [NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/)
 
 
 ---

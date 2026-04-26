@@ -825,11 +825,26 @@ sudo containerlab destroy -t evpn-lab.clab.yaml --cleanup
 
 ## References
 
-- RFC 7348: VXLAN — datatracker.ietf.org/doc/html/rfc7348
-- RFC 7432: BGP MPLS-Based Ethernet VPN — datatracker.ietf.org/doc/html/rfc7432
-- RFC 8365: Network Virtualization over L3 — datatracker.ietf.org/doc/html/rfc8365
-- OVS documentation: docs.openvswitch.org
-- OVN documentation: docs.ovn.org
+- [RFC 7348: VXLAN](https://datatracker.ietf.org/doc/html/rfc7348)
+- [RFC 7432: BGP MPLS-Based Ethernet VPN](https://datatracker.ietf.org/doc/html/rfc7432)
+- [RFC 8365: Network Virtualization over L3](https://datatracker.ietf.org/doc/html/rfc8365)
+- [RFC 8926: Geneve Encapsulation](https://datatracker.ietf.org/doc/html/rfc8926)
+- [Open vSwitch](https://www.openvswitch.org)
+- [Open vSwitch documentation](https://docs.openvswitch.org)
+- [OVN (Open Virtual Network)](https://www.ovn.org)
+- [OVN documentation](https://docs.ovn.org)
+- [FRRouting (FRR)](https://frrouting.org)
+- [Containerlab](https://containerlab.dev)
+- [SR Linux](https://learn.srlinux.dev)
+- [SONiC](https://sonicfoundation.dev)
+- [iproute2](https://wiki.linuxfoundation.org/networking/iproute2)
+- [bridge-utils](https://wiki.linuxfoundation.org/networking/bridge)
+- [DPDK (Data Plane Development Kit)](https://www.dpdk.org)
+- [OpenFlow Switch Specification](https://opennetworking.org/sdn-resources/openflow-switch-specification/)
+- [ncclient](https://ncclient.readthedocs.io)
+- [Wireshark](https://www.wireshark.org)
+- [tcpdump](https://www.tcpdump.org)
+- [Kubernetes](https://kubernetes.io/docs/)
 
 
 ---

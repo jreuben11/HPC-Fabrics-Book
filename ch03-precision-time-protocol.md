@@ -726,10 +726,18 @@ INFO[0002] Removed containerlab network: clab-ptp-domain
 
 ## References
 
-- IEEE Std 1588-2019: *IEEE Standard for a Precision Clock Synchronization Protocol for Networked Measurement and Control Systems*
-- linuxptp project: linuxptp.sourceforge.net / github.com/richardcochran/linuxptp
-- Eidson, J.C., *Measurement, Control, and Communication Using IEEE 1588*, Springer 2006
-- IETF RFC 8173: *Precision Time Protocol Version 2 (PTPv2) Management Information Base*
+- IEEE Std 1588-2019: *IEEE Standard for a Precision Clock Synchronization Protocol for Networked Measurement and Control Systems* — [standards.ieee.org/ieee/1588/6825/](https://standards.ieee.org/ieee/1588/6825/)
+- [linuxptp](https://linuxptp.sourceforge.net) — open-source Linux PTP implementation (ptp4l, phc2sys, pmc, ts2phc); source at [github.com/richardcochran/linuxptp](https://github.com/richardcochran/linuxptp)
+- Eidson, J.C., *Measurement, Control, and Communication Using IEEE 1588*, Springer 2006 — [link.springer.com/book/10.1007/1-4020-3953-2](https://link.springer.com/book/10.1007/1-4020-3953-2)
+- IETF RFC 8173: *Precision Time Protocol Version 2 (PTPv2) Management Information Base* — [datatracker.ietf.org/doc/html/rfc8173](https://datatracker.ietf.org/doc/html/rfc8173)
+- [chrony](https://chrony-project.org) — NTP/PTP hybrid time synchronization daemon (chronyd, chronyc)
+- [Containerlab](https://containerlab.dev) — container-based network topology emulator
+- [SR Linux](https://learn.srlinux.dev) — Nokia containerized network OS (PTP Boundary Clock support)
+- [gpsd](https://gpsd.io/) — GPS daemon for GNSS/PPS-based grandmaster timing
+- [ethtool](https://man7.org/linux/man-pages/man8/ethtool.8.html) — NIC hardware timestamping inspection (`ethtool -T`)
+- [iproute2 / tc netem](https://wiki.linuxfoundation.org/networking/iproute2) — Linux traffic control (tc) and network emulator (netem) discipline
+- [OpenTelemetry](https://opentelemetry.io/docs/) — distributed tracing and telemetry framework requiring synchronized clocks
+- [SONiC](https://sonic-net.github.io/SONiC/) — open-source network OS with PTP Boundary/Transparent Clock support
 
 
 ---

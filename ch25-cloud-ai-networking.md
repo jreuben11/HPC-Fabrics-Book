@@ -1290,14 +1290,29 @@ echo "Lab 25 cleanup complete"
 
 ## References
 
-- Amazon Web Services, *EFA User Guide*, docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa.html
-- aws/aws-ofi-nccl, *AWS OFI NCCL Plugin*, github.com/aws/aws-ofi-nccl
-- Microsoft Azure, *HPC VM sizes — NDv5 series*, learn.microsoft.com/en-us/azure/virtual-machines/ndv5-series
-- Google Cloud, *GPUDirect-TCPX overview*, cloud.google.com/compute/docs/gpus/gpudirect
-- OpenFabrics Alliance, *libfabric Programmer's Manual*, ofiwg.github.io/libfabric/
-- Klenk et al., *An In-Depth Analysis of the EFA SRD Transport*, IEEE IPDPS 2020
-- Hoefler et al., *Scalable Communication Protocols for Dynamic Sparse Data Exchange*, PPoPP 2010
-- NCCL documentation: docs.nvidia.com/deeplearning/nccl/
+- [AWS EFA (Elastic Fabric Adapter) User Guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa.html)
+- [aws-ofi-nccl (AWS OFI NCCL Plugin)](https://github.com/aws/aws-ofi-nccl)
+- [efa-utils](https://github.com/aws/efa-utils)
+- [libfabric / OFI (OpenFabrics Interfaces)](https://github.com/ofiwg/libfabric)
+- [libfabric Programmer's Manual](https://ofiwg.github.io/libfabric/)
+- [fabtests (fi_pingpong, fi_msg_bw, fi_info)](https://github.com/ofiwg/libfabric/tree/main/fabtests)
+- [NCCL (NVIDIA Collective Communications Library)](https://docs.nvidia.com/deeplearning/nccl/)
+- [Azure NDv5 series (HPC VMs with InfiniBand)](https://learn.microsoft.com/en-us/azure/virtual-machines/ndv5-series)
+- [Azure RDMA / InfiniBand enablement](https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/enable-infiniband)
+- [Google Cloud TPU / Pathways](https://cloud.google.com/tpu/docs)
+- [Google Cloud GPUDirect-TCPX overview](https://cloud.google.com/compute/docs/gpus/gpudirect)
+- [hpc-x (Mellanox HPC toolkit: OpenMPI + UCX)](https://docs.nvidia.com/networking/display/hpcxv2)
+- [UCX (Unified Communication X)](https://openucx.org)
+- [OpenMPI](https://www.open-mpi.org)
+- [MVAPICH2](https://mvapich.cse.ohio-state.edu)
+- [hwloc / lstopo](https://www.open-mpi.org/projects/hwloc/)
+- [rdma-core (libibverbs)](https://github.com/linux-rdma/rdma-core)
+- [RoCEv2](https://www.infinibandta.org/roce/)
+- [boto3 (AWS SDK for Python)](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
+- [paramiko](https://www.paramiko.org)
+- [fabric (Python SSH library)](https://www.fabfile.org)
+- Klenk et al., *An In-Depth Analysis of the EFA SRD Transport*, IEEE IPDPS 2020 — [ieeexplore.ieee.org/document/9139797](https://ieeexplore.ieee.org/document/9139797)
+- Hoefler et al., *Scalable Communication Protocols for Dynamic Sparse Data Exchange*, PPoPP 2010 — [dl.acm.org/doi/10.1145/1837853.1693465](https://dl.acm.org/doi/10.1145/1837853.1693465)
 
 
 ---

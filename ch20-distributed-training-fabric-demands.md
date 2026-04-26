@@ -475,11 +475,19 @@ deactivate
 
 ## References
 
-- PyTorch Distributed documentation: pytorch.org/docs/stable/distributed.html
-- DeepSpeed documentation: deepspeed.ai/docs
-- Ray documentation: docs.ray.io
-- Megatron-LM: github.com/NVIDIA/Megatron-LM
-- Rajbhandari et al., *ZeRO: Memory Optimizations Toward Training Trillion Parameter Models*, SC 2020
+- [PyTorch Distributed documentation](https://pytorch.org/docs/stable/distributed.html)
+- [PyTorch DDP (Distributed Data Parallel)](https://pytorch.org/docs/stable/notes/ddp.html)
+- [PyTorch FSDP (Fully Sharded Data Parallel)](https://pytorch.org/docs/stable/fsdp.html)
+- [torchrun launcher](https://pytorch.org/docs/stable/elastic/run.html)
+- [DeepSpeed documentation](https://www.deepspeed.ai/docs/)
+- [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)
+- [Horovod](https://horovod.readthedocs.io)
+- [Ray documentation](https://docs.ray.io)
+- [Gloo (collective communications library)](https://github.com/facebookincubator/gloo)
+- [NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/)
+- [MPI (OpenMPI)](https://www.open-mpi.org/doc/)
+- [Apache Arrow](https://arrow.apache.org/docs/)
+- Rajbhandari et al., *ZeRO: Memory Optimizations Toward Training Trillion Parameter Models*, SC 2020 — [arxiv.org/abs/1910.02054](https://arxiv.org/abs/1910.02054)
 
 
 ---

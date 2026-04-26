@@ -948,12 +948,22 @@ sudo containerlab destroy -t lab-srlinux.yaml --cleanup
 
 ## References
 
-- RFC 6241: NETCONF — datatracker.ietf.org/doc/html/rfc6241
-- RFC 7950: YANG 1.1 — datatracker.ietf.org/doc/html/rfc7950
-- RFC 8040: RESTCONF — datatracker.ietf.org/doc/html/rfc8040
-- OpenConfig models: openconfig.net/projects/models
-- pyang: github.com/mbj4668/pyang
-- ncclient: ncclient.readthedocs.io
+- [RFC 6241: NETCONF](https://datatracker.ietf.org/doc/html/rfc6241)
+- [RFC 7950: YANG 1.1](https://datatracker.ietf.org/doc/html/rfc7950)
+- [RFC 8040: RESTCONF](https://datatracker.ietf.org/doc/html/rfc8040)
+- [OpenConfig](https://openconfig.net)
+- [OpenConfig YANG models](https://openconfig.net/projects/models)
+- [ncclient](https://ncclient.readthedocs.io)
+- [pyang](https://github.com/mbj4668/pyang)
+- [libyang (yanglint)](https://github.com/CESNET/libyang)
+- [Containerlab](https://containerlab.dev)
+- [SR Linux](https://learn.srlinux.dev)
+- [IETF YANG models repository (YangModels)](https://github.com/YangModels/yang)
+- [paramiko](https://www.paramiko.org)
+- [netmiko](https://github.com/ktbyers/netmiko)
+- [lxml](https://lxml.de)
+- [xmltodict](https://github.com/martinblech/xmltodict)
+- [deepdiff](https://zepworks.com/deepdiff/)
 
 
 ---

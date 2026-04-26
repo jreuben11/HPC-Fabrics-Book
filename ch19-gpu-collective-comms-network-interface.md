@@ -527,12 +527,20 @@ docker network rm nccl-lab
 
 ## References
 
-- NCCL documentation: docs.nvidia.com/deeplearning/nccl
-- NCCL GitHub: github.com/NVIDIA/nccl
-- NCCL tests: github.com/NVIDIA/nccl-tests
-- SHARP documentation: docs.nvidia.com/networking/display/sharpv300
-- RCCL: github.com/ROCm/rccl
-- oneCCL: github.com/oneapi-src/oneCCL
+- [NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/)
+- [NCCL GitHub](https://github.com/NVIDIA/nccl)
+- [nccl-tests](https://github.com/NVIDIA/nccl-tests)
+- [SHARP documentation](https://docs.nvidia.com/networking/display/sharpv300)
+- [RCCL (AMD ROCm Collective Communications Library)](https://github.com/ROCm/rccl)
+- [oneCCL (Intel oneAPI Collective Communications Library)](https://oneapi-src.github.io/oneCCL/)
+- [MSCCL (Microsoft Collective Communication Library)](https://github.com/microsoft/msccl)
+- [MSCCL++ ](https://github.com/microsoft/mscclpp)
+- [Gloo (Facebook collective communications)](https://github.com/facebookincubator/gloo)
+- [UCX (Unified Communication X)](https://openucx.org)
+- [RDMA Core (libibverbs)](https://github.com/linux-rdma/rdma-core)
+- [PyTorch documentation](https://pytorch.org/docs/)
+- [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)
+- [DCQCN congestion control (Zhu et al.)](https://dl.acm.org/doi/10.1145/2829988.2787510)
 
 
 ---

@@ -711,11 +711,21 @@ fi_info -p verbs 2>&1
 
 ## References
 
-- UCX documentation: openucx.readthedocs.io
-- UCC documentation: openucx.github.io/ucc
-- LibFabric documentation: ofiwg.github.io/libfabric
-- PMIx Standard v5: pmix.org
-- CXL Consortium specification: computeexpresslink.org
+- [UCX (Unified Communication X)](https://openucx.org) — transport-agnostic communication library (UCT/UCP layers)
+- [UCC (Unified Collective Communication)](https://openucx.github.io/ucc) — collective-operations companion to UCX
+- [libfabric (OpenFabrics Interface / OFI)](https://ofiwg.github.io/libfabric/) — transport-agnostic messaging API (verbs, EFA, PSM3, CXI providers)
+- [PMIx Standard v5](https://pmix.org) — Process Management Interface for Exascale specification
+- [Open PMIx](https://openpmix.github.io) — reference implementation of the PMIx standard (libpmix, PRRTE)
+- [CXL Consortium specification](https://computeexpresslink.org) — Compute Express Link cache-coherent memory fabric standard
+- [OpenMPI](https://www.open-mpi.org/doc/) — open-source MPI implementation (uses UCX and PMIx)
+- [NCCL](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/) — NVIDIA Collective Communications Library (uses UCX on IB/RoCE)
+- [libibverbs / rdma-core](https://github.com/linux-rdma/rdma-core) — RDMA verbs userspace stack underlying the `verbs` OFI provider
+- [AWS EFA (Elastic Fabric Adapter)](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa.html) — low-latency HPC NIC for EC2; exposed via `efa` OFI provider
+- [HPE Slingshot](https://www.hpe.com/us/en/hpc-cluster/slingshot-fabric.html) — HPE high-speed HPC fabric; exposed via `cxi` OFI provider
+- [Intel Omni-Path (PSM3)](https://github.com/intel/eth-psm3-fi) — Intel high-bandwidth fabric; exposed via `psm3` OFI provider
+- [NVIDIA SHARP](https://docs.nvidia.com/networking/display/sharpv300) — Scalable Hierarchical Aggregation and Reduction Protocol; in-network AllReduce on Spectrum switches
+- [NVIDIA Grace Hopper Superchip](https://www.nvidia.com/en-us/data-center/grace-hopper-superchip/) — GPU+CPU chip with coherent NVLink-C2C interconnect
+- [pyucx](https://github.com/openucx/ucx/tree/master/bindings/python) — Python bindings for the UCX C API
 
 
 ---

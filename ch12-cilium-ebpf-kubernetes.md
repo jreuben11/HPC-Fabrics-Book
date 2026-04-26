@@ -821,11 +821,16 @@ kind delete cluster --name cilium-lab
 
 ## References
 
-- Cilium documentation: docs.cilium.io
-- Cilium GitHub: github.com/cilium/cilium
-- Hubble: github.com/cilium/hubble
-- Postfinance blog: *Cilium in production at PostFinance*, cilium.io/blog
-- CNCF case studies: cncf.io/case-studies/?_sft_project=cilium
+- [Cilium documentation](https://docs.cilium.io)
+- [Cilium GitHub](https://github.com/cilium/cilium)
+- [Hubble](https://github.com/cilium/hubble)
+- [eBPF](https://ebpf.io)
+- [Kubernetes](https://kubernetes.io/docs/)
+- [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io)
+- [Helm](https://helm.sh)
+- [Envoy Proxy](https://www.envoyproxy.io)
+- [Prometheus](https://prometheus.io)
+- [Docker](https://docs.docker.com)
 
 
 ---

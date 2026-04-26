@@ -1447,11 +1447,24 @@ act push --job deploy-and-test \
 
 ## References
 
-- Containerlab documentation: containerlab.dev
-- SR Linux container image: github.com/nokia/srlinux-container-image
-- SONiC-VS: github.com/sonic-net/sonic-buildimage
-- vrnetlab: github.com/hellt/vrnetlab
-- Containerlab examples: github.com/srl-labs/containerlab/tree/main/lab-examples
+- [Containerlab documentation](https://containerlab.dev)
+- [Containerlab GitHub](https://github.com/srl-labs/containerlab)
+- [Containerlab lab examples](https://github.com/srl-labs/containerlab/tree/main/lab-examples)
+- [SR Linux (Nokia)](https://learn.srlinux.dev)
+- [SR Linux container image](https://github.com/nokia/srlinux-container-image)
+- [SONiC Foundation](https://sonicfoundation.dev)
+- [SONiC-VS build image](https://github.com/sonic-net/sonic-buildimage)
+- [FRRouting (FRR)](https://frrouting.org)
+- [vrnetlab](https://github.com/hellt/vrnetlab)
+- [GNS3](https://www.gns3.com)
+- [EVE-NG](https://www.eve-ng.net)
+- [GitHub Actions](https://docs.github.com/en/actions)
+- [Docker](https://docs.docker.com)
+- [gnmic (gNMI client)](https://gnmic.openconfig.net)
+- [iperf3](https://iperf.fr/iperf-doc.php)
+- [Netmiko](https://ktbyers.github.io/netmiko/)
+- [paramiko](https://www.paramiko.org)
+- [act (run GitHub Actions locally)](https://github.com/nektos/act)
 
 
 ---

@@ -795,11 +795,22 @@ kind delete cluster --name multus-lab
 
 ## References
 
-- Multus CNI: github.com/k8snetworkplumbingwg/multus-cni
-- SR-IOV Network Operator: sriov-network-operator.readthedocs.io
-- NVIDIA Network Operator: docs.nvidia.com/networking/display/cokan
-- Whereabouts: github.com/k8snetworkplumbingwg/whereabouts
-- NCCL RDMA documentation: docs.nvidia.com/deeplearning/nccl
+- [Multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni)
+- [SR-IOV Network Operator](https://github.com/k8snetworkplumbingwg/sriov-network-operator)
+- [SR-IOV Network Device Plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin)
+- [Whereabouts IPAM](https://github.com/k8snetworkplumbingwg/whereabouts)
+- [Network Plumbing Working Group — multi-net spec](https://github.com/k8snetworkplumbingwg/multi-net-spec)
+- [NVIDIA Network Operator](https://docs.nvidia.com/networking/display/cokan)
+- [NCCL documentation](https://docs.nvidia.com/deeplearning/nccl)
+- [Kubernetes](https://kubernetes.io/docs/)
+- [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io)
+- [Helm](https://helm.sh)
+- [Flannel CNI](https://github.com/flannel-io/flannel)
+- [PyTorch](https://pytorch.org)
+- [gloo (distributed communication library)](https://github.com/facebookincubator/gloo)
+- [iperf3](https://iperf.fr)
+- [nicolaka/netshoot](https://github.com/nicolaka/netshoot)
+- [Mellanox OFED (MOFED)](https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/)
 
 
 ---

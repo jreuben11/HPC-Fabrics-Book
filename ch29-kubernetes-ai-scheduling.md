@@ -1581,16 +1581,25 @@ rm -f kind-ai-cluster.yaml volcano-queue.yaml gang-job.yaml gang-overprovision.y
 
 ## References
 
-- Volcano documentation: volcano.sh/docs
-- Volcano GitHub: github.com/volcano-sh/volcano
-- Kueue documentation: kueue.sigs.k8s.io/docs
-- Kueue GitHub: github.com/kubernetes-sigs/kueue
-- scheduler-plugins (Coscheduler): github.com/kubernetes-sigs/scheduler-plugins
-- NCCL topology documentation: docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-topo-file
-- Kubernetes Topology Manager: kubernetes.io/docs/tasks/administer-cluster/topology-manager
-- Kind: kind.sigs.k8s.io
-- Kubernetes PriorityClass: kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption
-- Alibaba AI infrastructure blog: medium.com/alibaba-cloud/volcano-apache-rocketmq-e1b64f5c3d88
+- [Volcano documentation](https://volcano.sh/docs)
+- [Volcano GitHub](https://github.com/volcano-sh/volcano)
+- [Kueue documentation](https://kueue.sigs.k8s.io/docs)
+- [Kueue GitHub](https://github.com/kubernetes-sigs/kueue)
+- [scheduler-plugins (Coscheduler)](https://github.com/kubernetes-sigs/scheduler-plugins)
+- [NCCL topology documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-topo-file)
+- [Kubernetes Topology Manager](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager)
+- [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io)
+- [Kubernetes PriorityClass](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption)
+- [SLURM Workload Manager](https://slurm.schedmd.com/documentation.html)
+- [PMIx — Process Management Interface for Exascale](https://pmix.org)
+- [Pyxis — SLURM plugin for container jobs](https://github.com/NVIDIA/pyxis)
+- [Enroot — container runtime for HPC](https://github.com/NVIDIA/enroot)
+- [RunAI GPU scheduling platform](https://docs.run.ai)
+- [NVIDIA Dynamo — distributed inference serving framework](https://github.com/ai-dynamo/dynamo)
+- [vLLM — high-throughput LLM inference library](https://docs.vllm.ai)
+- [DCGM — NVIDIA Data Center GPU Manager](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/index.html)
+- [NVIDIA GPU device plugin for Kubernetes](https://github.com/NVIDIA/k8s-device-plugin)
+- [Alibaba AI infrastructure blog](https://medium.com/alibaba-cloud/volcano-apache-rocketmq-e1b64f5c3d88)
 
 
 ---

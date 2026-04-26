@@ -593,10 +593,33 @@ docker ps --filter "label=clab-node-name"
 
 ## References
 
-- NVIDIA Networking: *Understanding the GPU Fabric for Large Language Model Training* — developer.nvidia.com
-- Gangidi et al., *RoCEv2 Congestion Management in Production AI Clusters*, NSDI 2024
-- Al-Fares et al., *A Scalable, Commodity Data Center Network Architecture* (fat-tree paper), SIGCOMM 2008
-- Rashidi et al., *ASTRA-SIM: Enabling SW/HW Co-Design Exploration for Distributed DL Training Platforms*, ISPASS 2020
+- NVIDIA Networking: *Understanding the GPU Fabric for Large Language Model Training* — [developer.nvidia.com](https://developer.nvidia.com/networking)
+- Gangidi et al., *RoCEv2 Congestion Management in Production AI Clusters*, NSDI 2024 — [usenix.org/conference/nsdi24](https://www.usenix.org/conference/nsdi24/technical-sessions)
+- Al-Fares et al., *A Scalable, Commodity Data Center Network Architecture* (fat-tree/Clos paper), SIGCOMM 2008 — [dl.acm.org/doi/10.1145/1402946.1402967](https://dl.acm.org/doi/10.1145/1402946.1402967)
+- Rashidi et al., *ASTRA-SIM: Enabling SW/HW Co-Design Exploration for Distributed DL Training Platforms*, ISPASS 2020 — [arxiv.org/abs/1910.04940](https://arxiv.org/abs/1910.04940)
+- [Containerlab](https://containerlab.dev) — container-based network topology emulator
+- [SR Linux](https://learn.srlinux.dev) — Nokia containerized network operating system
+- [iperf3](https://iperf.fr) — network throughput testing tool
+- [iproute2](https://wiki.linuxfoundation.org/networking/iproute2) — Linux IP routing and network configuration utilities
+- [FRRouting (FRR)](https://frrouting.org) — open-source IP routing suite (BGP, OSPF, etc.)
+- [NCCL](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/) — NVIDIA Collective Communications Library
+- [UCX](https://openucx.org) — Unified Communication X transport abstraction
+- [DPDK](https://doc.dpdk.org) — Data Plane Development Kit
+- [linuxptp](https://linuxptp.sourceforge.net) — Linux PTP (IEEE 1588) implementation
+- [NVLink](https://www.nvidia.com/en-us/data-center/nvlink/) — NVIDIA high-bandwidth GPU-to-GPU interconnect
+- [NVIDIA BlueField DPU](https://www.nvidia.com/en-us/networking/products/data-processing-unit/) — NVIDIA data processing unit / SmartNIC
+- [SONiC](https://sonic-net.github.io/SONiC/) — open-source network operating system
+- [PyTorch](https://pytorch.org/docs/) — deep learning framework
+- [DeepSpeed](https://www.deepspeed.ai/docs/) — deep learning optimization library
+- [OpenTelemetry](https://opentelemetry.io/docs/) — observability framework for distributed traces and metrics
+- [Ceph](https://docs.ceph.com/) — distributed storage system
+- [Lustre](https://wiki.lustre.org/Main_Page) — parallel distributed file system
+- [DAOS](https://docs.daos.io/) — Distributed Asynchronous Object Storage
+- [Cilium](https://docs.cilium.io/) — eBPF-based Kubernetes networking and security
+- [eBPF / XDP](https://ebpf.io/docs/) — kernel-bypass programmable packet processing
+- [SPDK](https://spdk.io/doc/) — Storage Performance Development Kit
+- [P4](https://p4.org/specs/) — programming language for data plane programmability
+- [gNMI](https://github.com/openconfig/reference/tree/master/rpc/gnmi) — gRPC Network Management Interface
 
 
 ---

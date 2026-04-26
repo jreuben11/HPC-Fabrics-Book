@@ -852,12 +852,24 @@ To understand PCIe or NIC behavior, replace `se.py` with `configs/example/fs.py`
 
 ## References
 
-- NS-3 documentation: nsnam.org/documentation
-- OMNET++ documentation: omnetpp.org/documentation
-- SST documentation: sst-simulator.org
-- GEM5 documentation: gem5.org
-- Zhu et al., *Congestion Control for Large-Scale RDMA Deployments* (DCQCN NS-3 model), SIGCOMM 2015
-- HPCC: *High Precision Congestion Control* — github.com/alibaba-edu/High-Precision-Congestion-Control
+- [NS-3 documentation](https://www.nsnam.org/docs/)
+- [OMNeT++ documentation](https://omnetpp.org/documentation/)
+- [INET framework (OMNeT++)](https://inet.omnetpp.org)
+- [SST (Structural Simulation Toolkit)](https://sst-simulator.org)
+- [SST-Merlin interconnect component](https://github.com/sstsimulator/sst-elements/tree/master/src/sst/elements/merlin)
+- [GEM5 documentation](https://www.gem5.org/documentation/)
+- [HPCC: High Precision Congestion Control (NS-3 fork)](https://github.com/alibaba-edu/High-Precision-Congestion-Control)
+- [ASTRA-SIM](https://astra-sim.github.io)
+- [SimAI](https://github.com/aliyun/SimAI)
+- [SCons build system (GEM5)](https://scons.org)
+- [matplotlib](https://matplotlib.org)
+- [pandas](https://pandas.pydata.org)
+- [numpy](https://numpy.org)
+- [seaborn](https://seaborn.pydata.org)
+- [Jupyter](https://jupyter.org)
+- [uv (Python package manager)](https://docs.astral.sh/uv/)
+- [Containerlab](https://containerlab.dev)
+- Zhu et al., *Congestion Control for Large-Scale RDMA Deployments* (DCQCN NS-3 model), SIGCOMM 2015 — [dl.acm.org/doi/10.1145/2829988.2787510](https://dl.acm.org/doi/10.1145/2829988.2787510)
 
 
 ---

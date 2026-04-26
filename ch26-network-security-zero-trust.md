@@ -1313,16 +1313,27 @@ echo "Cleanup complete."
 
 ## References
 
-- WireGuard: wireguard.com — Donenfeld, J.A., "WireGuard: Next Generation Kernel Network Tunnel", NDSS 2017
-- Cilium transparent encryption: docs.cilium.io/en/stable/security/network/encryption-wireguard/
-- strongSwan documentation: docs.strongswan.org/docs/5.9/index.html
-- SPIFFE specification: github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md
-- SPIRE GitHub: github.com/spiffe/spire
-- HashiCorp Vault PKI secrets engine: developer.hashicorp.com/vault/docs/secrets/pki
-- cert-manager documentation: cert-manager.io/docs/
-- Cilium CiliumNetworkPolicy: docs.cilium.io/en/stable/network/kubernetes/policy/
-- Hubble observability: docs.cilium.io/en/stable/observability/hubble/
-- NIST SP 800-207: Zero Trust Architecture (nist.gov/publications/zero-trust-architecture)
+- [WireGuard](https://www.wireguard.com) — Donenfeld, J.A., "WireGuard: Next Generation Kernel Network Tunnel", NDSS 2017
+- [Cilium transparent encryption (WireGuard mode)](https://docs.cilium.io/en/stable/security/network/encryption-wireguard/)
+- [Cilium Network Policy](https://docs.cilium.io/en/stable/security/policy/)
+- [Cilium CiliumNetworkPolicy](https://docs.cilium.io/en/stable/network/kubernetes/policy/)
+- [Hubble observability](https://docs.cilium.io/en/stable/observability/hubble/)
+- [strongSwan documentation](https://docs.strongswan.org/docs/5.9/index.html)
+- [SPIFFE/SPIRE — Secure Production Identity Framework for Everyone](https://spiffe.io)
+- [SPIFFE specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md)
+- [SPIRE GitHub](https://github.com/spiffe/spire)
+- [HashiCorp Vault PKI secrets engine](https://developer.hashicorp.com/vault/docs/secrets/pki)
+- [HashiCorp Vault documentation](https://developer.hashicorp.com/vault/docs)
+- [cert-manager documentation](https://cert-manager.io/docs/)
+- [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/publications/detail/sp/800-207/final)
+- [Kubernetes](https://kubernetes.io/docs/)
+- [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io)
+- [Istio service mesh](https://istio.io/latest/docs/)
+- [OPA (Open Policy Agent)](https://www.openpolicyagent.org/docs/)
+- [Falco runtime security](https://falco.org/docs/)
+- [Tetragon eBPF security observability](https://tetragon.io/docs/)
+- [hvac — HashiCorp Vault Python client](https://hvac.readthedocs.io/en/stable/)
+- [IPsec RFC 4106 (AES-GCM)](https://datatracker.ietf.org/doc/html/rfc4106)
 
 
 ---

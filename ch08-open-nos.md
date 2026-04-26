@@ -1167,10 +1167,32 @@ docker ps | grep clab
 
 ## References
 
-- SONiC architecture wiki: github.com/sonic-net/SONiC/wiki
-- SR Linux documentation: documentation.nokia.com/srlinux
-- FRR documentation: docs.frrouting.org
-- SAI specification: github.com/opencomputeproject/SAI
+- [SONiC — Software for Open Networking in the Cloud (GitHub)](https://github.com/sonic-net/SONiC/wiki)
+- [SONiC Foundation](https://sonicfoundation.dev)
+- [SR Linux documentation (Nokia)](https://documentation.nokia.com/srlinux/)
+- [SR Linux learn portal](https://learn.srlinux.dev)
+- [SR Linux NDK — Network Developer Kit](https://learn.srlinux.dev/ndk/)
+- [FRRouting (FRR) documentation](https://docs.frrouting.org)
+- [SAI — Switch Abstraction Interface (OCP)](https://github.com/opencomputeproject/SAI)
+- [Containerlab — NOS topology orchestrator](https://containerlab.dev)
+- [gnmic — gNMI CLI client](https://gnmic.openconfig.net)
+- [gNMI — gRPC Network Management Interface (OpenConfig)](https://www.openconfig.net/projects/gnmi/)
+- [OpenConfig — vendor-neutral network data models](https://www.openconfig.net)
+- [YANG — RFC 7950 data modeling language (IETF)](https://www.rfc-editor.org/rfc/rfc7950)
+- [NETCONF — RFC 6241 (IETF)](https://www.rfc-editor.org/rfc/rfc6241)
+- [EVPN — RFC 7432 BGP MPLS-based Ethernet VPN (IETF)](https://www.rfc-editor.org/rfc/rfc7432)
+- [ncclient — Python NETCONF client](https://ncclient.readthedocs.io)
+- [netmiko — Python SSH multi-vendor NOS library](https://github.com/ktbyers/netmiko)
+- [Redis — in-memory data store (used as SONiC IPC bus)](https://redis.io)
+- [VyOS — open-source router NOS](https://vyos.io)
+- [DENT — Linux Foundation NOS for enterprise edge](https://dent.dev)
+- [OpenWrt — Linux NOS for embedded networking](https://openwrt.org)
+- [FreeRTOS — RTOS for microcontrollers](https://freertos.org)
+- [Zephyr — Linux Foundation RTOS for constrained devices](https://zephyrproject.org)
+- [west — Zephyr meta-tool / build system](https://docs.zephyrproject.org/latest/develop/west/index.html)
+- [switchdev — Linux kernel ASIC hardware abstraction framework](https://www.kernel.org/doc/html/latest/networking/switchdev.html)
+- [StrongSwan — IPsec VPN implementation](https://www.strongswan.org)
+- [Docker — container runtime](https://www.docker.com)
 
 
 ---
