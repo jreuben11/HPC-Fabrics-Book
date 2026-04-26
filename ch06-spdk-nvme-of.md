@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Storage is not a peripheral concern in AI training clusters — it is a critical path component that can idle thousands of GPUs if not engineered carefully. This chapter examines SPDK (Storage Performance Development Kit) and NVMe-oF (NVMe over Fabrics), two technologies that together bring storage I/O performance into alignment with the throughput and latency demands of large-scale model training.
+
+The central problem is checkpoint I/O. A 70B-parameter model in fp32 with optimizer state occupies roughly 800 GB on disk. Training runs checkpoint periodically — often every few hundred steps — to guard against hardware failure. If the checkpoint write takes longer than a single training step, GPUs stall, wasting expensive accelerator time. The Linux kernel's NVMe driver, designed for general-purpose workloads, leaves significant performance on the table through interrupt overhead, block-layer latency, and memory copies between kernel and user space. SPDK solves this by moving the NVMe driver entirely into user space, adopting a polling model identical in spirit to DPDK's kernel-bypass approach from Chapter 5.
+
+NVMe-oF extends the NVMe command set across a network fabric, allowing remote SSDs to appear as local NVMe devices. Over RDMA (RoCE or InfiniBand), NVMe-oF achieves sub-10 µs latency — comparable to local PCIe-attached NVMe. Over TCP, it provides a practical checkpoint path on the management Ethernet when RDMA bandwidth is reserved for collective communication. This separation of checkpoint traffic from gradient traffic is a key architectural pattern that recurs throughout Part IV of this book.
+
+The reader will learn: how SPDK's polling reactor model eliminates I/O overhead; how to configure an NVMe-oF target and initiator with both RDMA and TCP transports; how SPDK's blobstore and RAID layers compose for high-bandwidth checkpoint writing; and how to benchmark the full stack with fio and io_uring. The lab walkthrough requires no physical NVMe hardware — a RAM-backed `bdev_malloc` provides a functionally complete NVMe-oF target for development and testing.
+
+This chapter connects directly to Chapter 5 (DPDK) — SPDK's user-space architecture mirrors DPDK's philosophy exactly, reusing DPDK's EAL and hugepage memory allocator. It sets the stage for Chapter 18 (Distributed Storage), which addresses the cluster-wide incast and consistency problems that arise when thousands of GPUs checkpoint simultaneously.
+
+---
+
+---
+
 ## Installation
+
+SPDK must be built from source because no distribution package exists; the build depends on libaio, liburing, and optionally libibverbs for RDMA transport support. The `fio` benchmark tool and `nvme-cli` are installed from apt to drive I/O workloads against the NVMe-oF target and connect from the initiator side. The `nvme-tcp` kernel module is loaded at runtime to enable the kernel-side NVMe-oF TCP initiator, which connects to the SPDK target without requiring RDMA hardware. Python management scripts use `paramiko` for issuing SPDK JSON-RPC commands to remote nodes over SSH.
 
 ### Ubuntu 24.04 — apt prerequisites
 
@@ -69,20 +87,6 @@ uv pip install paramiko
 python -c "import paramiko; print(paramiko.__version__)"
 # Expected: 3.x.x
 ```
-
----
-
-## Introduction
-
-Storage is not a peripheral concern in AI training clusters — it is a critical path component that can idle thousands of GPUs if not engineered carefully. This chapter examines SPDK (Storage Performance Development Kit) and NVMe-oF (NVMe over Fabrics), two technologies that together bring storage I/O performance into alignment with the throughput and latency demands of large-scale model training.
-
-The central problem is checkpoint I/O. A 70B-parameter model in fp32 with optimizer state occupies roughly 800 GB on disk. Training runs checkpoint periodically — often every few hundred steps — to guard against hardware failure. If the checkpoint write takes longer than a single training step, GPUs stall, wasting expensive accelerator time. The Linux kernel's NVMe driver, designed for general-purpose workloads, leaves significant performance on the table through interrupt overhead, block-layer latency, and memory copies between kernel and user space. SPDK solves this by moving the NVMe driver entirely into user space, adopting a polling model identical in spirit to DPDK's kernel-bypass approach from Chapter 5.
-
-NVMe-oF extends the NVMe command set across a network fabric, allowing remote SSDs to appear as local NVMe devices. Over RDMA (RoCE or InfiniBand), NVMe-oF achieves sub-10 µs latency — comparable to local PCIe-attached NVMe. Over TCP, it provides a practical checkpoint path on the management Ethernet when RDMA bandwidth is reserved for collective communication. This separation of checkpoint traffic from gradient traffic is a key architectural pattern that recurs throughout Part IV of this book.
-
-The reader will learn: how SPDK's polling reactor model eliminates I/O overhead; how to configure an NVMe-oF target and initiator with both RDMA and TCP transports; how SPDK's blobstore and RAID layers compose for high-bandwidth checkpoint writing; and how to benchmark the full stack with fio and io_uring. The lab walkthrough requires no physical NVMe hardware — a RAM-backed `bdev_malloc` provides a functionally complete NVMe-oF target for development and testing.
-
-This chapter connects directly to Chapter 5 (DPDK) — SPDK's user-space architecture mirrors DPDK's philosophy exactly, reusing DPDK's EAL and hugepage memory allocator. It sets the stage for Chapter 18 (Distributed Storage), which addresses the cluster-wide incast and consistency problems that arise when thousands of GPUs checkpoint simultaneously.
 
 ---
 

@@ -4,7 +4,50 @@
 
 ---
 
+## Introduction
+
+Kubernetes was built for stateless microservices that can be scheduled independently, spread for availability, and bin-packed by CPU and memory. Distributed AI training jobs violate every one of those assumptions. They require all ranks to be running simultaneously before any can make progress (gang scheduling), they are topology-sensitive to the point where a single rack boundary can add 40% overhead to pipeline-parallel training (topology awareness), and their resource requirements — typically 8 GPUs per pod, hundreds of pods per job — make fragmentation a default state rather than an edge case. This chapter explains what breaks and how to fix it.
+
+The chapter opens with the failure modes (§29.1) and the core concept of gang scheduling (§29.2), establishing the vocabulary of `PodGroup`, `minMember`, starvation, and deadlock. From there it covers three Kubernetes-native scheduling systems: Volcano (§29.3), the dominant production gang scheduler that introduces `Queue`, `PodGroup`, and `Job` CRDs along with DRF-based fairness and preemption; Kueue (§29.4), which acts as an admission controller above the default scheduler, managing quota without replacing it; and Coscheduler (§29.5), which implements gang scheduling as a `kube-scheduler` plugin for environments that want gang guarantees without deploying a separate scheduler binary.
+
+Sections 29.6 and 29.7 move from scheduling policy to physical consequences. Topology-aware scheduling using `topologySpreadConstraints` and NUMA affinity keeps AllReduce traffic within a rack, eliminating spine traversal that can add 3µs per hop to collective latency. The quantitative analysis in §29.7 shows that for high-frequency pipeline-parallel communications with small tensors, cross-rack placement can increase collective overhead by 40–50%. Section 29.8 builds out the operational policy layer: priority classes, preemption order, and multi-team quota management.
+
+Section 29.9 extends beyond pure Kubernetes to the three additional scheduling systems that dominate real AI infrastructure: SLURM for HPC-origin MPI workloads where topology-aware allocation is expressed through `topology.conf` and `--switches`; RunAI for GPU utilization governance with its Projects and Departments quota model; and NVIDIA Dynamo for disaggregated prefill-decode inference serving at scale, where the performance-critical path is the KV cache RDMA transfer between prefill and decode workers.
+
+This chapter connects directly to Chapter 2 (RoCEv2 fabric bandwidth that makes rank placement performance-critical), Chapter 12 (Cilium CNI that provides pod networking within which NCCL operates), Chapter 13 (SR-IOV and the NVIDIA GPU device plugin that exposes GPUs to pods), and Chapter 27 (adaptive routing that determines how cross-rack traffic is handled when topology-constrained placement is not possible).
+
+## 29.1 Why Standard Kubernetes Scheduling Breaks for AI
+
+The default Kubernetes scheduler (`kube-scheduler`) was designed for stateless microservices: schedule each pod independently, bin-pack by CPU and memory, and spread for availability. This model fails for distributed AI training jobs in three distinct ways.
+
+### Gang Scheduling Requirement
+
+A distributed training job with N ranks cannot make progress unless all N ranks are running simultaneously. If only 7 of 8 ranks start, the 7 running ranks call `init_process_group()` and block at the rendezvous barrier indefinitely, consuming GPU memory and CPU cycles while achieving zero useful work. The eighth rank may be Pending because its node ran out of memory, or because the default scheduler decided to defer it for bin-packing efficiency.
+
+Gang scheduling solves this with an **all-or-nothing** guarantee: either all N pods in a group are schedulable simultaneously, or none are scheduled at all. Pods wait in a coordinated Pending state rather than being partially launched.
+
+### Topology Blindness
+
+The default scheduler knows about node labels, taints, and `topologySpreadConstraints`, but it has no built-in model of:
+- Which nodes share an NVLink domain (GPU topology)
+- Which nodes are under the same ToR switch (rack membership)
+- Which NICs are closest to which GPUs (RDMA affinity)
+
+A 4-rank job scheduled across 4 racks will produce exactly the same performance as one scheduled on 4 nodes in the same rack — from the scheduler's perspective. In reality, the cross-rack job may be 2–5x slower due to spine switch traversal latency and bandwidth competition.
+
+### Resource Fragmentation
+
+Without coordination, multiple independent schedulers (or the same scheduler across concurrent jobs) can fragment cluster resources such that no single job can be fully scheduled even though the total available resources would fit it. Consider two 4-GPU jobs running on a cluster with 8 GPUs (4 per node): if node A has 2 GPUs allocated and node B has 2 GPUs allocated, neither job can fit even though 4 total GPUs are free.
+
+Gang scheduling with a global admission controller prevents fragmentation by treating each job's resource requirement atomically.
+
+---
+
+---
+
 ## Installation
+
+The lab runs entirely on a local multi-node Kubernetes cluster created by Kind, which requires only Docker and the `kind` binary — no cloud provider access is needed. `kubectl` and Helm are prerequisites for every subsequent installation step: Helm deploys both the Volcano gang scheduler (which installs the `vcctl` CLI, the `vc-scheduler` binary, and the `PodGroup` and `Queue` CRDs) and the Kueue admission controller (which adds `ClusterQueue`, `LocalQueue`, and `ResourceFlavor` CRDs). Coscheduler is deployed as a second `kube-scheduler` plugin via its own Helm chart and operates alongside the default scheduler, requiring no removal of existing scheduler infrastructure. GPU resource sharing and quota management across all three systems depend on the NVIDIA GPU device plugin, which is deployed separately and is covered in Chapter 13; this chapter assumes it is already running in the cluster.
 
 ### System packages
 
@@ -51,45 +94,6 @@ uv venv .venv && source .venv/bin/activate
 uv pip install kubernetes pyyaml
 python -c "import kubernetes, yaml; print('OK')"
 ```
-
----
-
-## Introduction
-
-Kubernetes was built for stateless microservices that can be scheduled independently, spread for availability, and bin-packed by CPU and memory. Distributed AI training jobs violate every one of those assumptions. They require all ranks to be running simultaneously before any can make progress (gang scheduling), they are topology-sensitive to the point where a single rack boundary can add 40% overhead to pipeline-parallel training (topology awareness), and their resource requirements — typically 8 GPUs per pod, hundreds of pods per job — make fragmentation a default state rather than an edge case. This chapter explains what breaks and how to fix it.
-
-The chapter opens with the failure modes (§29.1) and the core concept of gang scheduling (§29.2), establishing the vocabulary of `PodGroup`, `minMember`, starvation, and deadlock. From there it covers three Kubernetes-native scheduling systems: Volcano (§29.3), the dominant production gang scheduler that introduces `Queue`, `PodGroup`, and `Job` CRDs along with DRF-based fairness and preemption; Kueue (§29.4), which acts as an admission controller above the default scheduler, managing quota without replacing it; and Coscheduler (§29.5), which implements gang scheduling as a `kube-scheduler` plugin for environments that want gang guarantees without deploying a separate scheduler binary.
-
-Sections 29.6 and 29.7 move from scheduling policy to physical consequences. Topology-aware scheduling using `topologySpreadConstraints` and NUMA affinity keeps AllReduce traffic within a rack, eliminating spine traversal that can add 3µs per hop to collective latency. The quantitative analysis in §29.7 shows that for high-frequency pipeline-parallel communications with small tensors, cross-rack placement can increase collective overhead by 40–50%. Section 29.8 builds out the operational policy layer: priority classes, preemption order, and multi-team quota management.
-
-Section 29.9 extends beyond pure Kubernetes to the three additional scheduling systems that dominate real AI infrastructure: SLURM for HPC-origin MPI workloads where topology-aware allocation is expressed through `topology.conf` and `--switches`; RunAI for GPU utilization governance with its Projects and Departments quota model; and NVIDIA Dynamo for disaggregated prefill-decode inference serving at scale, where the performance-critical path is the KV cache RDMA transfer between prefill and decode workers.
-
-This chapter connects directly to Chapter 2 (RoCEv2 fabric bandwidth that makes rank placement performance-critical), Chapter 12 (Cilium CNI that provides pod networking within which NCCL operates), Chapter 13 (SR-IOV and the NVIDIA GPU device plugin that exposes GPUs to pods), and Chapter 27 (adaptive routing that determines how cross-rack traffic is handled when topology-constrained placement is not possible).
-
-## 29.1 Why Standard Kubernetes Scheduling Breaks for AI
-
-The default Kubernetes scheduler (`kube-scheduler`) was designed for stateless microservices: schedule each pod independently, bin-pack by CPU and memory, and spread for availability. This model fails for distributed AI training jobs in three distinct ways.
-
-### Gang Scheduling Requirement
-
-A distributed training job with N ranks cannot make progress unless all N ranks are running simultaneously. If only 7 of 8 ranks start, the 7 running ranks call `init_process_group()` and block at the rendezvous barrier indefinitely, consuming GPU memory and CPU cycles while achieving zero useful work. The eighth rank may be Pending because its node ran out of memory, or because the default scheduler decided to defer it for bin-packing efficiency.
-
-Gang scheduling solves this with an **all-or-nothing** guarantee: either all N pods in a group are schedulable simultaneously, or none are scheduled at all. Pods wait in a coordinated Pending state rather than being partially launched.
-
-### Topology Blindness
-
-The default scheduler knows about node labels, taints, and `topologySpreadConstraints`, but it has no built-in model of:
-- Which nodes share an NVLink domain (GPU topology)
-- Which nodes are under the same ToR switch (rack membership)
-- Which NICs are closest to which GPUs (RDMA affinity)
-
-A 4-rank job scheduled across 4 racks will produce exactly the same performance as one scheduled on 4 nodes in the same rack — from the scheduler's perspective. In reality, the cross-rack job may be 2–5x slower due to spine switch traversal latency and bandwidth competition.
-
-### Resource Fragmentation
-
-Without coordination, multiple independent schedulers (or the same scheduler across concurrent jobs) can fragment cluster resources such that no single job can be fully scheduled even though the total available resources would fit it. Consider two 4-GPU jobs running on a cluster with 8 GPUs (4 per node): if node A has 2 GPUs allocated and node B has 2 GPUs allocated, neither job can fit even though 4 total GPUs are free.
-
-Gang scheduling with a global admission controller prevents fragmentation by treating each job's resource requirement atomically.
 
 ---
 

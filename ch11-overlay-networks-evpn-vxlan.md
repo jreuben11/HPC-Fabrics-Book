@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+AI compute clusters run two fundamentally different classes of network traffic simultaneously. The first is the GPU-to-GPU collective communication fabric — low-latency, high-bandwidth RDMA flows that must cross the physical network without encapsulation overhead. The second is the management and multi-tenant fabric — container orchestration, storage access, monitoring pipelines, and tenant isolation — where the ability to define isolated Layer 2 domains across a shared routed underlay is essential. This chapter addresses the second class.
+
+VXLAN (Virtual Extensible LAN) and BGP-EVPN (Ethernet VPN) are the industry-standard answer for building scalable overlay networks on top of a pure IP underlay. VXLAN extends Ethernet frames across the IP fabric using UDP encapsulation with 24-bit segment identifiers, providing 16 million logical isolation domains in place of the 4094 VLAN limit. BGP-EVPN eliminates the flooding required to learn remote MAC and IP addresses by distributing that reachability information as BGP routes, enabling data centers with thousands of endpoints to operate without BUM (Broadcast, Unknown-unicast, Multicast) flooding at scale.
+
+Open vSwitch (OVS) and Open Virtual Network (OVN) bring this overlay model into the host: OVS is a production-quality software switch with kernel and DPDK fast paths that implements VXLAN tunneling and an OpenFlow-programmable forwarding pipeline, while OVN adds a logical abstraction layer — logical switches, routers, and ACLs — that OVN compiles down to per-host OVS flow rules. Together they form the datapath that Kubernetes CNIs such as OVN-Kubernetes rely on to implement pod networking.
+
+The reader will leave this chapter able to build a BGP-EVPN overlay fabric from first principles, inspect and program the OVS OpenFlow pipeline, and configure OVN logical networks. The lab walkthrough constructs a four-leaf, two-spine EVPN fabric in Containerlab with SONiC-VS leaves and SR Linux spines, and traces a live VXLAN-encapsulated packet from source to destination.
+
+This chapter sits within Part IV alongside Chapters 12 and 13. Chapter 12 builds on the overlay model by showing how Cilium uses eBPF to replace the OVS/iptables datapath entirely. Chapter 13 extends the Kubernetes pod networking model to support multiple NICs per pod — the prerequisite for attaching a pod to both the overlay management network and the RDMA data-plane network simultaneously.
+
+---
+
+---
+
 ## Installation
+
+The chapter requires iproute2 and bridge-utils to create and inspect VXLAN interfaces, bridge FDB entries, and VTEP state directly from the Linux kernel. Open vSwitch (ovs-vsctl, ovs-ofctl) provides the software switch datapath and the OpenFlow pipeline that OVN compiles logical network definitions into. FRR (Free Range Routing), specifically the bgpd and zebra daemons, runs the BGP-EVPN control plane that distributes MAC/IP reachability across VTEPs, eliminating the flooding that would otherwise be required. Containerlab is used to wire together the four-leaf, two-spine lab topology with SR Linux spines and SONiC-VS leaves, giving a realistic fabric to exercise the full EVPN-VXLAN stack.
 
 ### System packages (Ubuntu 24.04)
 
@@ -48,20 +66,6 @@ uv venv .venv && source .venv/bin/activate
 uv pip install netmiko ncclient
 python -c "import netmiko, ncclient; print('OK')"
 ```
-
----
-
-## Introduction
-
-AI compute clusters run two fundamentally different classes of network traffic simultaneously. The first is the GPU-to-GPU collective communication fabric — low-latency, high-bandwidth RDMA flows that must cross the physical network without encapsulation overhead. The second is the management and multi-tenant fabric — container orchestration, storage access, monitoring pipelines, and tenant isolation — where the ability to define isolated Layer 2 domains across a shared routed underlay is essential. This chapter addresses the second class.
-
-VXLAN (Virtual Extensible LAN) and BGP-EVPN (Ethernet VPN) are the industry-standard answer for building scalable overlay networks on top of a pure IP underlay. VXLAN extends Ethernet frames across the IP fabric using UDP encapsulation with 24-bit segment identifiers, providing 16 million logical isolation domains in place of the 4094 VLAN limit. BGP-EVPN eliminates the flooding required to learn remote MAC and IP addresses by distributing that reachability information as BGP routes, enabling data centers with thousands of endpoints to operate without BUM (Broadcast, Unknown-unicast, Multicast) flooding at scale.
-
-Open vSwitch (OVS) and Open Virtual Network (OVN) bring this overlay model into the host: OVS is a production-quality software switch with kernel and DPDK fast paths that implements VXLAN tunneling and an OpenFlow-programmable forwarding pipeline, while OVN adds a logical abstraction layer — logical switches, routers, and ACLs — that OVN compiles down to per-host OVS flow rules. Together they form the datapath that Kubernetes CNIs such as OVN-Kubernetes rely on to implement pod networking.
-
-The reader will leave this chapter able to build a BGP-EVPN overlay fabric from first principles, inspect and program the OVS OpenFlow pipeline, and configure OVN logical networks. The lab walkthrough constructs a four-leaf, two-spine EVPN fabric in Containerlab with SONiC-VS leaves and SR Linux spines, and traces a live VXLAN-encapsulated packet from source to destination.
-
-This chapter sits within Part IV alongside Chapters 12 and 13. Chapter 12 builds on the overlay model by showing how Cilium uses eBPF to replace the OVS/iptables datapath entirely. Chapter 13 extends the Kubernetes pod networking model to support multiple NICs per pod — the prerequisite for attaching a pod to both the overlay management network and the RDMA data-plane network simultaneously.
 
 ---
 

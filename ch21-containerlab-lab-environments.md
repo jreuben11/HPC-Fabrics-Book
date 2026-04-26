@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Chapter 21 introduces Containerlab, the infrastructure-as-code tool that turns a network topology YAML file into a fully operational virtual lab running inside Docker containers. By the end of this chapter you will have deployed a GPU rail fabric with two spine switches, two rail-segregated top-of-rack switches, and dual-homed server containers — all wired with BGP eBGP sessions and verified end-to-end with iperf3 — and packaged that topology as a GitHub Actions CI job that runs on every pull request.
+
+The motivation is practical and urgent. AI cluster networking is complex enough that a mis-configured ACL, a BGP policy bug, or a mis-wired ECMP path can silently degrade AllReduce throughput by 10× without triggering any obvious alarm. The only way to catch these problems early is to test them in an environment that mirrors production as closely as possible, as early as possible — ideally before any config change merges. Containerlab makes that possible on a laptop.
+
+Chapter 20 described the fabric demands of distributed AI training: rail-optimized topology, lossless RDMA, sub-microsecond jitter budgets. This chapter builds the emulation environment in which those properties can be tested without production hardware. Chapter 22 extends that environment into a full CI/CD pipeline with static analysis and golden-diff validation; Chapter 23 covers simulation tools for the cases where emulation is insufficient.
+
+Containerlab achieves its simplicity by treating standard Docker containers as network nodes and Linux veth pairs as links. Each NOS image — Nokia SR Linux, SONiC-VS, FRR — runs in an unmodified Docker container; Containerlab wires the containers together at the network-namespace level and injects startup configuration files. The result is a reproducible, version-controlled, diff-reviewable network topology that boots in under two minutes and is torn down with a single command.
+
+The chapter builds from first principles: Section 21.1 establishes why infrastructure-as-code is necessary, Sections 21.2–21.5 dissect the YAML topology format and CLI, Sections 21.6–21.7 cover VM-based nodes and CI integration, and the Lab Walkthrough executes the full GPU rail fabric end-to-end with annotated expected output at every step.
+
+---
+
+---
+
 ## Installation
+
+Docker provides the container runtime that Containerlab uses to instantiate each NOS node; without it, no topology can be deployed. Containerlab itself is installed via its official installer script and orchestrates Docker containers, virtual Ethernet pairs, and startup-config injection to build multi-NOS lab topologies from a single YAML file. The SR Linux, SONiC-VS, and FRR images are pulled from public registries and serve as the spine, leaf, and host NOS images throughout the lab walkthroughs and CI pipeline. The optional vrnetlab package is required only when a topology includes VM-based commercial NOSes such as IOS-XE or vMX that cannot run as unmodified Docker containers.
 
 All commands assume Ubuntu 24.04 LTS on x86-64. Run as a non-root user with `sudo` access.
 
@@ -70,20 +88,6 @@ uv pip install netmiko paramiko pyyaml
 python -c "import netmiko, paramiko, yaml; print('OK')"
 # Expected: OK
 ```
-
----
-
-## Introduction
-
-Chapter 21 introduces Containerlab, the infrastructure-as-code tool that turns a network topology YAML file into a fully operational virtual lab running inside Docker containers. By the end of this chapter you will have deployed a GPU rail fabric with two spine switches, two rail-segregated top-of-rack switches, and dual-homed server containers — all wired with BGP eBGP sessions and verified end-to-end with iperf3 — and packaged that topology as a GitHub Actions CI job that runs on every pull request.
-
-The motivation is practical and urgent. AI cluster networking is complex enough that a mis-configured ACL, a BGP policy bug, or a mis-wired ECMP path can silently degrade AllReduce throughput by 10× without triggering any obvious alarm. The only way to catch these problems early is to test them in an environment that mirrors production as closely as possible, as early as possible — ideally before any config change merges. Containerlab makes that possible on a laptop.
-
-Chapter 20 described the fabric demands of distributed AI training: rail-optimized topology, lossless RDMA, sub-microsecond jitter budgets. This chapter builds the emulation environment in which those properties can be tested without production hardware. Chapter 22 extends that environment into a full CI/CD pipeline with static analysis and golden-diff validation; Chapter 23 covers simulation tools for the cases where emulation is insufficient.
-
-Containerlab achieves its simplicity by treating standard Docker containers as network nodes and Linux veth pairs as links. Each NOS image — Nokia SR Linux, SONiC-VS, FRR — runs in an unmodified Docker container; Containerlab wires the containers together at the network-namespace level and injects startup configuration files. The result is a reproducible, version-controlled, diff-reviewable network topology that boots in under two minutes and is torn down with a single command.
-
-The chapter builds from first principles: Section 21.1 establishes why infrastructure-as-code is necessary, Sections 21.2–21.5 dissect the YAML topology format and CLI, Sections 21.6–21.7 cover VM-based nodes and CI integration, and the Lab Walkthrough executes the full GPU rail fabric end-to-end with annotated expected output at every step.
 
 ---
 

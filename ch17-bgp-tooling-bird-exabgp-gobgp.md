@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+BGP (Border Gateway Protocol) is the routing protocol that holds the Internet together, but inside a modern AI cluster it plays a different and equally critical role: advertising GPU node prefixes, distributing anycast VIP reachability, and enabling programmable route injection by application-layer health-checking systems. The previous chapter on Open NOS platforms (Chapter 8) covered FRR — the full-featured routing suite embedded in SONiC, SR Linux, and VyOS — which handles BGP as one component of a general-purpose routing stack. This chapter addresses the three specialized scenarios where FRR is the wrong tool, and lighter, purpose-built BGP implementations are the right answer.
+
+BGP in a leaf-spine AI cluster serves as the fabric's control plane: every leaf advertises its directly-connected GPU server subnets, and every spine distributes reachability among all leaves. In clusters with hundreds of leaves, a route reflector eliminates the O(N²) full-mesh BGP peering requirement — and BIRD, designed as a lightweight, high-performance routing daemon, is the standard choice for this role. BIRD's compact memory footprint and fast convergence make it deployable on commodity Linux servers without dedicated routing hardware.
+
+Beyond route reflection, the need to inject and withdraw prefixes programmatically — driven by service health, not static configuration — is a recurring pattern in AI infrastructure. Load balancer VIPs, GPU node anycast addresses, and inference endpoint prefixes all need to appear in the fabric routing table only while the corresponding services are healthy. ExaBGP provides a clean mechanism: it runs a user-defined process, reads BGP announcements from that process's stdout, and handles the BGP state machine without requiring the application to implement it.
+
+For SDN controllers and programmatic orchestration, GoBGP exposes a gRPC API over its entire control plane. A Python script can query the RIB, add or withdraw prefixes, and inspect peer state — all without writing Go code or touching a configuration file. This is the natural integration point for cluster management systems that need to react to GPU node failures or topology changes.
+
+Readers will configure BIRD as a route reflector, implement health-checked anycast VIP injection with ExaBGP, and drive GoBGP from Python gRPC stubs — building toward the autonomous fabric control patterns used in production AI clusters. This chapter connects directly to Chapter 12 (Cilium BGP Control Plane, which uses BIRD internally), Chapter 15 (gNMI telemetry that surfaces BGP state), and Chapter 16 (Prometheus dashboards that alert on BGP session drops).
+
+---
+
+---
+
 ## Installation
+
+Four BGP implementations are installed to cover the distinct roles they play in AI cluster routing. BIRD2 is deployed as the route reflector daemon — its low memory footprint and fast convergence make it the standard choice for eliminating the full-mesh BGP peering requirement in large leaf-spine clusters. ExaBGP is installed as the health-check-driven announcement engine: it runs an operator-supplied process, reads BGP UPDATE messages from that process's stdout, and handles the BGP state machine so that application-layer health checks can drive prefix advertisements without implementing the protocol directly. GoBGP is fetched as a standalone binary and provides a gRPC API over its full control plane, enabling Python-based orchestration of RIB queries, prefix injection, and peer inspection from the same cluster management scripts that respond to GPU node failures. FRR is included for direct comparison, as it is the routing suite embedded in SONiC, SR Linux, and VyOS and represents the general-purpose alternative against which the specialized tools are benchmarked.
 
 ### System packages (Ubuntu 24.04)
 
@@ -61,20 +79,6 @@ ls *.py
 
 cd ..
 ```
-
----
-
-## Introduction
-
-BGP (Border Gateway Protocol) is the routing protocol that holds the Internet together, but inside a modern AI cluster it plays a different and equally critical role: advertising GPU node prefixes, distributing anycast VIP reachability, and enabling programmable route injection by application-layer health-checking systems. The previous chapter on Open NOS platforms (Chapter 8) covered FRR — the full-featured routing suite embedded in SONiC, SR Linux, and VyOS — which handles BGP as one component of a general-purpose routing stack. This chapter addresses the three specialized scenarios where FRR is the wrong tool, and lighter, purpose-built BGP implementations are the right answer.
-
-BGP in a leaf-spine AI cluster serves as the fabric's control plane: every leaf advertises its directly-connected GPU server subnets, and every spine distributes reachability among all leaves. In clusters with hundreds of leaves, a route reflector eliminates the O(N²) full-mesh BGP peering requirement — and BIRD, designed as a lightweight, high-performance routing daemon, is the standard choice for this role. BIRD's compact memory footprint and fast convergence make it deployable on commodity Linux servers without dedicated routing hardware.
-
-Beyond route reflection, the need to inject and withdraw prefixes programmatically — driven by service health, not static configuration — is a recurring pattern in AI infrastructure. Load balancer VIPs, GPU node anycast addresses, and inference endpoint prefixes all need to appear in the fabric routing table only while the corresponding services are healthy. ExaBGP provides a clean mechanism: it runs a user-defined process, reads BGP announcements from that process's stdout, and handles the BGP state machine without requiring the application to implement it.
-
-For SDN controllers and programmatic orchestration, GoBGP exposes a gRPC API over its entire control plane. A Python script can query the RIB, add or withdraw prefixes, and inspect peer state — all without writing Go code or touching a configuration file. This is the natural integration point for cluster management systems that need to react to GPU node failures or topology changes.
-
-Readers will configure BIRD as a route reflector, implement health-checked anycast VIP injection with ExaBGP, and drive GoBGP from Python gRPC stubs — building toward the autonomous fabric control patterns used in production AI clusters. This chapter connects directly to Chapter 12 (Cilium BGP Control Plane, which uses BIRD internally), Chapter 15 (gNMI telemetry that surfaces BGP state), and Chapter 16 (Prometheus dashboards that alert on BGP session drops).
 
 ---
 

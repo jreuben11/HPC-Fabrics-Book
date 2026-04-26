@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+GPU training pods have a networking problem that standard Kubernetes cannot solve out of the box: they need two fundamentally different network interfaces simultaneously. The first is a conventional container network interface for Kubernetes control plane traffic — DNS lookups, service discovery, health checks, and monitoring. The second is a high-performance RDMA interface directly attached to a physical NIC's Virtual Function, providing the near-zero-overhead data path that NCCL collective operations require for gradient synchronization. Standard Kubernetes assigns exactly one network interface per pod, and that interface belongs to the primary CNI plugin.
+
+Multus CNI (Container Network Interface) solves this by acting as a meta-plugin: it delegates to other CNI plugins in sequence, attaching multiple interfaces to a single pod. The primary CNI — typically Cilium or Flannel — handles `eth0` for management traffic, while a secondary CNI configuration backed by SR-IOV creates `net1`, `net2`, and so on for RDMA data-plane traffic. Each secondary interface is defined by a `NetworkAttachmentDefinition` custom resource, and pods request them via a single pod annotation.
+
+SR-IOV (Single Root I/O Virtualization) is the PCIe hardware feature that makes this practical at scale. A single physical NIC (the Physical Function) can expose up to 127 isolated Virtual Functions, each appearing as an independent PCIe device with its own hardware queues, MAC address, and RDMA capability. When a pod is assigned an SR-IOV VF, it has a direct hardware path to the NIC's RDMA engine — bypassing the host kernel networking stack and enabling GPUDirect RDMA transfers directly from GPU memory to the wire.
+
+This chapter covers the complete Kubernetes network stack for GPU pods: Multus CNI for multi-NIC attachment, SR-IOV VF provisioning, the SR-IOV Network Operator for cluster-scale automated VF management, the NVIDIA Network Operator as an all-in-one deployment bundle, Whereabouts for cluster-wide IPAM on secondary networks, and GPUDirect RDMA configuration. The lab walkthrough uses Kind with macvlan and Soft-RoCE to simulate the full stack without real SR-IOV hardware.
+
+This chapter builds directly on Chapter 12 (Cilium as the primary CNI managing `eth0`) and Chapter 2 (RoCEv2 and RDMA fundamentals). Chapter 19 examines how NCCL uses the RDMA VFs this chapter provisions to implement ring-allreduce and tree-allreduce collective algorithms across the GPU fabric.
+
+---
+
+---
+
 ## Installation
+
+kubectl, Helm, and Kind are the standard Kubernetes management tools used to stand up the lab cluster and deploy the SR-IOV Network Operator via Helm chart. The rdma-core and libibverbs packages provide the Linux RDMA userspace stack, including the ibv_devinfo and ib_write_bw utilities needed to verify RDMA device presence and measure bandwidth inside pods. The rdma_rxe kernel module (Soft-RoCE) emulates an RDMA device over a standard Ethernet interface, making it possible to exercise the full Multus annotation, NetworkAttachmentDefinition, and RDMA verification workflow in a Kind cluster without physical Mellanox NICs. This combination allows the chapter's lab to demonstrate multi-NIC pod attachment and RDMA path validation on any development machine, with a clear mapping to what changes when real SR-IOV Virtual Functions are present.
 
 ### System Packages (Ubuntu 24.04)
 
@@ -32,20 +50,6 @@ lsmod | grep rdma_rxe
 uv venv .venv && source .venv/bin/activate
 uv pip install kubernetes pyyaml
 ```
-
----
-
-## Introduction
-
-GPU training pods have a networking problem that standard Kubernetes cannot solve out of the box: they need two fundamentally different network interfaces simultaneously. The first is a conventional container network interface for Kubernetes control plane traffic — DNS lookups, service discovery, health checks, and monitoring. The second is a high-performance RDMA interface directly attached to a physical NIC's Virtual Function, providing the near-zero-overhead data path that NCCL collective operations require for gradient synchronization. Standard Kubernetes assigns exactly one network interface per pod, and that interface belongs to the primary CNI plugin.
-
-Multus CNI (Container Network Interface) solves this by acting as a meta-plugin: it delegates to other CNI plugins in sequence, attaching multiple interfaces to a single pod. The primary CNI — typically Cilium or Flannel — handles `eth0` for management traffic, while a secondary CNI configuration backed by SR-IOV creates `net1`, `net2`, and so on for RDMA data-plane traffic. Each secondary interface is defined by a `NetworkAttachmentDefinition` custom resource, and pods request them via a single pod annotation.
-
-SR-IOV (Single Root I/O Virtualization) is the PCIe hardware feature that makes this practical at scale. A single physical NIC (the Physical Function) can expose up to 127 isolated Virtual Functions, each appearing as an independent PCIe device with its own hardware queues, MAC address, and RDMA capability. When a pod is assigned an SR-IOV VF, it has a direct hardware path to the NIC's RDMA engine — bypassing the host kernel networking stack and enabling GPUDirect RDMA transfers directly from GPU memory to the wire.
-
-This chapter covers the complete Kubernetes network stack for GPU pods: Multus CNI for multi-NIC attachment, SR-IOV VF provisioning, the SR-IOV Network Operator for cluster-scale automated VF management, the NVIDIA Network Operator as an all-in-one deployment bundle, Whereabouts for cluster-wide IPAM on secondary networks, and GPUDirect RDMA configuration. The lab walkthrough uses Kind with macvlan and Soft-RoCE to simulate the full stack without real SR-IOV hardware.
-
-This chapter builds directly on Chapter 12 (Cilium as the primary CNI managing `eth0`) and Chapter 2 (RoCEv2 and RDMA fundamentals). Chapter 19 examines how NCCL uses the RDMA VFs this chapter provisions to implement ring-allreduce and tree-allreduce collective algorithms across the GPU fabric.
 
 ---
 

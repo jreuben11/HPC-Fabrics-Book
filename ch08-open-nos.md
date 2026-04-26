@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+The network operating system (NOS) running on a switch determines how that switch is configured, automated, observed, and extended. For most of networking history, that software was proprietary, opaque, and tightly coupled to a single vendor's hardware. The rise of open NOSes — driven by hyperscalers who needed to operate networks at a scale and velocity that proprietary platforms could not support — fundamentally changed this equation, and AI cluster operators are the direct beneficiaries.
+
+This chapter surveys the open NOS landscape as it applies to AI cluster fabrics. SONiC (Software for Open Networking in the Cloud) is the production-grade choice for hyperscaler-class switching: a collection of containerized daemons communicating through a Redis database, running on any SAI-compliant ASIC from Broadcom, Mellanox, or Marvell. SR Linux is Nokia's programmability-first NOS: every configuration object is YANG-modeled, every state path is accessible via gNMI, and custom applications can be injected via the NDK without forking the NOS itself. FRRouting (FRR) provides the routing control plane — BGP, OSPF, IS-IS, EVPN — for both, and is the standard tool for configuring eBGP underlay fabrics in AI clusters.
+
+The reader will learn: how SONiC's Redis-centric architecture decouples configuration intent from ASIC programming; how SR Linux's YANG-native model enables controller-free automation; how to configure FRR for a spine-leaf eBGP fabric with ECMP and sub-second BFD failure detection; and how Containerlab composes these NOSes into a full lab topology on a single laptop. The chapter also surveys VyOS, DENT, OpenWrt, FreeRTOS, and Zephyr — the open NOS and RTOS landscape at the edges of the AI cluster fabric.
+
+The lab walkthrough builds a two-spine, two-leaf BGP fabric using SR Linux and SONiC-VS containers, verifies ECMP convergence, simulates a link failure with BFD, and streams gNMI telemetry from SR Linux to gnmic — all within Containerlab running on Ubuntu 24.04.
+
+This chapter connects backward to Chapter 5 (DPDK) and Chapter 7 (eBPF), which addressed the data-plane performance problems inside individual hosts, and forward to Chapter 14 (NETCONF/YANG/RESTCONF) and Chapter 15 (gNMI/OpenConfig), which cover the management protocols that open NOSes like SR Linux expose natively.
+
+---
+
+---
+
 ## Installation
+
+Containerlab is the lab orchestrator that deploys multi-vendor NOS topologies as Docker containers and wires them together with virtual links; it requires Docker as its container runtime. The SR Linux and SONiC-VS container images provide the actual NOS instances for the spine and leaf nodes, while the FRR package supplies the BGP and BFD routing daemons for the host router containers that originate prefixes into the fabric. The `gnmic` CLI client is installed to query and subscribe to gNMI telemetry streams from SR Linux, and the Python libraries `ncclient` and `netmiko` enable NETCONF-based and SSH-based automation of NOS devices from management scripts.
 
 This chapter uses Containerlab as the lab orchestrator (a tool that deploys multi-vendor network topologies as Docker containers, wiring them together with virtual links defined in a YAML file), Docker as the container runtime, SR Linux and SONiC-VS as the NOS images, FRR as the host-router control plane, and gnmic (a gNMI CLI client for querying and subscribing to network telemetry) for gNMI streaming telemetry. All tools run on Ubuntu 24.04.
 
@@ -77,20 +95,6 @@ uv pip install ncclient paramiko netmiko
 python -c "import ncclient, paramiko, netmiko; print('All imports OK')"
 # Expected: All imports OK
 ```
-
----
-
-## Introduction
-
-The network operating system (NOS) running on a switch determines how that switch is configured, automated, observed, and extended. For most of networking history, that software was proprietary, opaque, and tightly coupled to a single vendor's hardware. The rise of open NOSes — driven by hyperscalers who needed to operate networks at a scale and velocity that proprietary platforms could not support — fundamentally changed this equation, and AI cluster operators are the direct beneficiaries.
-
-This chapter surveys the open NOS landscape as it applies to AI cluster fabrics. SONiC (Software for Open Networking in the Cloud) is the production-grade choice for hyperscaler-class switching: a collection of containerized daemons communicating through a Redis database, running on any SAI-compliant ASIC from Broadcom, Mellanox, or Marvell. SR Linux is Nokia's programmability-first NOS: every configuration object is YANG-modeled, every state path is accessible via gNMI, and custom applications can be injected via the NDK without forking the NOS itself. FRRouting (FRR) provides the routing control plane — BGP, OSPF, IS-IS, EVPN — for both, and is the standard tool for configuring eBGP underlay fabrics in AI clusters.
-
-The reader will learn: how SONiC's Redis-centric architecture decouples configuration intent from ASIC programming; how SR Linux's YANG-native model enables controller-free automation; how to configure FRR for a spine-leaf eBGP fabric with ECMP and sub-second BFD failure detection; and how Containerlab composes these NOSes into a full lab topology on a single laptop. The chapter also surveys VyOS, DENT, OpenWrt, FreeRTOS, and Zephyr — the open NOS and RTOS landscape at the edges of the AI cluster fabric.
-
-The lab walkthrough builds a two-spine, two-leaf BGP fabric using SR Linux and SONiC-VS containers, verifies ECMP convergence, simulates a link failure with BFD, and streams gNMI telemetry from SR Linux to gnmic — all within Containerlab running on Ubuntu 24.04.
-
-This chapter connects backward to Chapter 5 (DPDK) and Chapter 7 (eBPF), which addressed the data-plane performance problems inside individual hosts, and forward to Chapter 14 (NETCONF/YANG/RESTCONF) and Chapter 15 (gNMI/OpenConfig), which cover the management protocols that open NOSes like SR Linux expose natively.
 
 ---
 

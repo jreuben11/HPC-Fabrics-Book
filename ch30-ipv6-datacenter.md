@@ -4,51 +4,6 @@
 
 ---
 
-## Installation
-
-### System packages (Ubuntu 24.04)
-
-```bash
-sudo apt update
-sudo apt install -y iproute2 iputils-ping ndisc6 radvd frr
-```
-
-### Containerlab
-
-```bash
-# Install Containerlab (requires Docker)
-bash -c "$(curl -sL https://get.containerlab.dev)"
-containerlab version
-# clab version 0.5x.x
-```
-
-### Python environment
-
-```bash
-# Install uv if not present
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-uv venv .venv && source .venv/bin/activate
-uv pip install scapy netaddr ipaddress
-python -c "import scapy; print(scapy.__version__)"
-```
-
-### FRR (Free Range Routing)
-
-```bash
-# Ubuntu 24.04 apt includes FRR 9.x
-sudo apt install -y frr frr-pythontools
-
-# Enable the daemons you will use
-sudo sed -i 's/bgpd=no/bgpd=yes/' /etc/frr/daemons
-sudo sed -i 's/zebra=no/zebra=yes/' /etc/frr/daemons
-sudo systemctl enable --now frr
-sudo vtysh -c "show version"
-# FRRouting 9.x (Ubuntu 24.04).
-```
-
----
-
 ## Introduction
 
 IPv4 address exhaustion is not a distant concern for AI infrastructure engineers — it is an immediate, operational problem. A 10,000-GPU cluster with dual-port NICs consumes 20,000 host addresses before storage, management, BMCs, and Kubernetes pod CIDRs are accounted for. A single /16 IPv4 block, historically considered generous for a datacenter, is simply too small. And the workaround — NAT — is incompatible with RDMA: RoCEv2 and InfiniBand use memory registrations tied to actual IP addresses, and NAT breaks the transport by hiding those addresses from the remote peer.
@@ -101,6 +56,55 @@ In AI cluster fabrics, SLAAC is valuable for:
 - **Management fabric:** BMCs, out-of-band switches, and management nodes auto-configure on day zero without a DHCP server.
 - **Pod-to-pod CNI addressing:** Cilium and Calico can assign pod IPv6 addresses via SLAAC-derived IIDs.
 - **Link-local addresses:** Every IPv6 interface automatically generates a `fe80::/10` link-local address from its MAC, enabling router-to-router BGP peering on point-to-point links without manual address configuration.
+
+---
+
+---
+
+## Installation
+
+FRR is the primary routing daemon for this chapter, providing MP-BGP with the `ipv6 unicast` and `l2vpn evpn` address families needed for dual-stack BGP underlay and IPv6 EVPN Type 2 and Type 5 routes. The `iproute2` package provides the `ip -6` subcommands for inspecting neighbor discovery state, IPv6 routing tables, and SRv6 segment-list routes. Containerlab orchestrates the virtual dual-stack fabric, pulling FRR and SR Linux container images automatically so the topology can be brought up with a single command. `radvd` (Router Advertisement Daemon) is installed on Linux nodes to emit RA messages that drive SLAAC address assignment, demonstrating how GPU nodes self-configure their fabric addresses without a DHCP server. Cilium is deployed in dual-stack mode via Helm to validate that pod networking correctly assigns and advertises both IPv4 and IPv6 prefixes.
+
+### System packages (Ubuntu 24.04)
+
+```bash
+sudo apt update
+sudo apt install -y iproute2 iputils-ping ndisc6 radvd frr
+```
+
+### Containerlab
+
+```bash
+# Install Containerlab (requires Docker)
+bash -c "$(curl -sL https://get.containerlab.dev)"
+containerlab version
+# clab version 0.5x.x
+```
+
+### Python environment
+
+```bash
+# Install uv if not present
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+uv venv .venv && source .venv/bin/activate
+uv pip install scapy netaddr ipaddress
+python -c "import scapy; print(scapy.__version__)"
+```
+
+### FRR (Free Range Routing)
+
+```bash
+# Ubuntu 24.04 apt includes FRR 9.x
+sudo apt install -y frr frr-pythontools
+
+# Enable the daemons you will use
+sudo sed -i 's/bgpd=no/bgpd=yes/' /etc/frr/daemons
+sudo sed -i 's/zebra=no/zebra=yes/' /etc/frr/daemons
+sudo systemctl enable --now frr
+sudo vtysh -c "show version"
+# FRRouting 9.x (Ubuntu 24.04).
+```
 
 ---
 

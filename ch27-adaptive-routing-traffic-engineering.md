@@ -4,7 +4,56 @@
 
 ---
 
+## Introduction
+
+AI cluster fabrics are built for one workload above all others: distributed training. In that workload, hundreds of GPU nodes exchange gradient tensors in tight synchronization loops, and the fabric must deliver bandwidth uniformly to every node or the entire training step slows to the pace of the worst link. This chapter explains why the default path-selection algorithm — ECMP — fails for that workload, and how to replace or augment it with adaptive techniques that restore balance.
+
+Equal-Cost Multi-Path (ECMP) was designed for environments where flows are many, short, and statistically independent. AllReduce traffic is the opposite: flows are few, large, and perfectly correlated by NCCL's ring topology. When a small set of long-lived flows must be distributed across a small number of equal-cost spines, hash collisions are not an edge case — they are the dominant outcome. Section 27.1 quantifies this failure mode, showing how a two-spine fabric with four GPU flows can load one spine at 3x the rate of the other.
+
+The adaptive routing techniques in this chapter span hardware, software, and protocol layers. Flowlet switching (§27.2) exploits the burst structure of RDMA traffic to safely reroute flows between ACK gaps, requiring no hardware changes and yielding imbalance ratios below 1.1x. NVIDIA's Adaptive Routing (§27.3) goes further, performing per-packet path selection in Spectrum-3/4 switch silicon based on real-time egress queue depth. Packet spraying (§27.4) is the most aggressive approach, routing each packet to an independently chosen path, and it demands receiver-side out-of-order handling and careful DCQCN congestion tracking.
+
+For environments that need explicit, policy-driven traffic engineering, Section 27.5 introduces SRv6 — Segment Routing over IPv6 — which embeds a full forwarding path in the IPv6 extension header, enabling deterministic steering of training flows across chosen links. Section 27.6 covers UCMP with the BGP Link Bandwidth extended community (RFC 7311), which proportionally weights forwarding across links of unequal capacity — essential during fabric upgrades or partial failures. Section 27.7 and the lab walkthrough provide the measurement tools to quantify imbalance before and after these interventions.
+
+This chapter builds directly on the BGP fabric architecture introduced in Chapter 8 (Open NOS) and the RoCEv2 congestion control model from Chapter 2. The SRv6 section connects to Chapter 30 (IPv6 in datacenter fabrics), and the FRR configurations used throughout the lab extend the routing protocol foundation from Chapter 17 (BGP tooling). Chapter 28 (Fault Tolerance and Resilience) picks up where this chapter leaves off, addressing what happens when adaptive routing is not enough and a link or switch actually fails mid-training.
+
+## 27.1 ECMP Limitations: Why Static Hashing Fails for AllReduce
+
+Equal-Cost Multi-Path (ECMP) is the universal multi-path forwarding mechanism in data-center fabrics. When a switch has multiple equal-cost paths to a destination, it selects one using a hash of the packet's 5-tuple (source IP, destination IP, source port, destination port, IP protocol). The same 5-tuple always hashes to the same output port — this is the foundational property that keeps TCP flows in-order.
+
+### The 5-Tuple Hash Collision Problem
+
+ECMP hashing distributes flows, not packets. All packets in a flow follow the same path. For AllReduce operations in GPU clusters, this creates a structural problem:
+
+```
+AllReduce communication pattern (Ring-AllReduce, 2 spines, 4 GPUs):
+  GPU0 → GPU2: flow (10.0.0.1:5000 → 10.0.0.3:5001)  →  spine1
+  GPU1 → GPU3: flow (10.0.0.2:5000 → 10.0.0.4:5001)  →  spine1  ← collision!
+  GPU2 → GPU0: flow (10.0.0.3:5001 → 10.0.0.1:5000)  →  spine2
+  GPU3 → GPU1: flow (10.0.0.4:5001 → 10.0.0.2:5000)  →  spine2
+```
+
+Two flows land on the same spine. One spine carries 2x the load of the other. The overloaded spine becomes a bottleneck, and the AllReduce step stalls waiting for the slowest link. This is not a hypothetical: in observed production GPU cluster training runs, ECMP imbalance has caused 30-40% degradation in step time due to fabric congestion on one spine while the other sits idle.
+
+### Elephant Flow Concentration
+
+AllReduce flows are by nature "elephant flows" — long-duration, high-bandwidth streams. Unlike web traffic where flows are short and ECMP imbalance averages out quickly, AllReduce flows persist for the entire duration of a training step (potentially minutes). A single unfortunate hash collision can create sustained congestion.
+
+The hash function itself is deterministic and depends only on the 5-tuple. For a specific AllReduce ring, the 5-tuples are fixed: the GPU IP addresses are stable, and the port numbers are assigned by NCCL's rendezvous mechanism. This means the imbalance is not random — it is reproducible on every training iteration.
+
+### Why Static Hashing Cannot Be Fixed by Configuration Alone
+
+Changing the ECMP hash seed can redistribute flows differently, but cannot guarantee balance for a specific set of flows. The only mathematical guarantee comes from either:
+1. **Per-packet load balancing**: routes individual packets across paths (at the cost of reordering)
+2. **Dynamic path selection**: reroutes flows when congestion is detected (flowlet switching, adaptive routing)
+3. **Application-level workarounds**: NCCL's `NCCL_IB_QPS_PER_CONNECTION` creates multiple QPs per GPU pair, diversifying the 5-tuple space
+
+---
+
+---
+
 ## Installation
+
+The lab environment is built on a SONiC virtual switch topology deployed through Containerlab, which requires the Containerlab binary and a working Docker installation — the SONiC-VS container image is pulled automatically at lab startup. FRR provides the BGP routing plane and the route-map configuration used for Link Bandwidth UCMP, and its `vtysh` shell is the primary interface for verifying ECMP path state and SRv6 policy route injection. Scapy is installed as a Python library to craft raw packets with controlled 5-tuple fields, enabling reproducible hash collision analysis that is impractical with standard traffic generators. The `iproute2` package must be current enough to include SRv6 support (`ip route add ... encap seg6` syntax), which is satisfied by the version shipped in Ubuntu 24.04.
 
 ### System packages
 
@@ -78,51 +127,6 @@ python -c "import pandas, matplotlib, seaborn, scapy; print('All imports OK')"
 python -c "from scapy.all import IP, UDP, send; print('scapy OK')"
 # Expected: scapy OK
 ```
-
----
-
-## Introduction
-
-AI cluster fabrics are built for one workload above all others: distributed training. In that workload, hundreds of GPU nodes exchange gradient tensors in tight synchronization loops, and the fabric must deliver bandwidth uniformly to every node or the entire training step slows to the pace of the worst link. This chapter explains why the default path-selection algorithm — ECMP — fails for that workload, and how to replace or augment it with adaptive techniques that restore balance.
-
-Equal-Cost Multi-Path (ECMP) was designed for environments where flows are many, short, and statistically independent. AllReduce traffic is the opposite: flows are few, large, and perfectly correlated by NCCL's ring topology. When a small set of long-lived flows must be distributed across a small number of equal-cost spines, hash collisions are not an edge case — they are the dominant outcome. Section 27.1 quantifies this failure mode, showing how a two-spine fabric with four GPU flows can load one spine at 3x the rate of the other.
-
-The adaptive routing techniques in this chapter span hardware, software, and protocol layers. Flowlet switching (§27.2) exploits the burst structure of RDMA traffic to safely reroute flows between ACK gaps, requiring no hardware changes and yielding imbalance ratios below 1.1x. NVIDIA's Adaptive Routing (§27.3) goes further, performing per-packet path selection in Spectrum-3/4 switch silicon based on real-time egress queue depth. Packet spraying (§27.4) is the most aggressive approach, routing each packet to an independently chosen path, and it demands receiver-side out-of-order handling and careful DCQCN congestion tracking.
-
-For environments that need explicit, policy-driven traffic engineering, Section 27.5 introduces SRv6 — Segment Routing over IPv6 — which embeds a full forwarding path in the IPv6 extension header, enabling deterministic steering of training flows across chosen links. Section 27.6 covers UCMP with the BGP Link Bandwidth extended community (RFC 7311), which proportionally weights forwarding across links of unequal capacity — essential during fabric upgrades or partial failures. Section 27.7 and the lab walkthrough provide the measurement tools to quantify imbalance before and after these interventions.
-
-This chapter builds directly on the BGP fabric architecture introduced in Chapter 8 (Open NOS) and the RoCEv2 congestion control model from Chapter 2. The SRv6 section connects to Chapter 30 (IPv6 in datacenter fabrics), and the FRR configurations used throughout the lab extend the routing protocol foundation from Chapter 17 (BGP tooling). Chapter 28 (Fault Tolerance and Resilience) picks up where this chapter leaves off, addressing what happens when adaptive routing is not enough and a link or switch actually fails mid-training.
-
-## 27.1 ECMP Limitations: Why Static Hashing Fails for AllReduce
-
-Equal-Cost Multi-Path (ECMP) is the universal multi-path forwarding mechanism in data-center fabrics. When a switch has multiple equal-cost paths to a destination, it selects one using a hash of the packet's 5-tuple (source IP, destination IP, source port, destination port, IP protocol). The same 5-tuple always hashes to the same output port — this is the foundational property that keeps TCP flows in-order.
-
-### The 5-Tuple Hash Collision Problem
-
-ECMP hashing distributes flows, not packets. All packets in a flow follow the same path. For AllReduce operations in GPU clusters, this creates a structural problem:
-
-```
-AllReduce communication pattern (Ring-AllReduce, 2 spines, 4 GPUs):
-  GPU0 → GPU2: flow (10.0.0.1:5000 → 10.0.0.3:5001)  →  spine1
-  GPU1 → GPU3: flow (10.0.0.2:5000 → 10.0.0.4:5001)  →  spine1  ← collision!
-  GPU2 → GPU0: flow (10.0.0.3:5001 → 10.0.0.1:5000)  →  spine2
-  GPU3 → GPU1: flow (10.0.0.4:5001 → 10.0.0.2:5000)  →  spine2
-```
-
-Two flows land on the same spine. One spine carries 2x the load of the other. The overloaded spine becomes a bottleneck, and the AllReduce step stalls waiting for the slowest link. This is not a hypothetical: in observed production GPU cluster training runs, ECMP imbalance has caused 30-40% degradation in step time due to fabric congestion on one spine while the other sits idle.
-
-### Elephant Flow Concentration
-
-AllReduce flows are by nature "elephant flows" — long-duration, high-bandwidth streams. Unlike web traffic where flows are short and ECMP imbalance averages out quickly, AllReduce flows persist for the entire duration of a training step (potentially minutes). A single unfortunate hash collision can create sustained congestion.
-
-The hash function itself is deterministic and depends only on the 5-tuple. For a specific AllReduce ring, the 5-tuples are fixed: the GPU IP addresses are stable, and the port numbers are assigned by NCCL's rendezvous mechanism. This means the imbalance is not random — it is reproducible on every training iteration.
-
-### Why Static Hashing Cannot Be Fixed by Configuration Alone
-
-Changing the ECMP hash seed can redistribute flows differently, but cannot guarantee balance for a specific set of flows. The only mathematical guarantee comes from either:
-1. **Per-packet load balancing**: routes individual packets across paths (at the cost of reordering)
-2. **Dynamic path selection**: reroutes flows when congestion is detected (flowlet switching, adaptive routing)
-3. **Application-level workarounds**: NCCL's `NCCL_IB_QPS_PER_CONNECTION` creates multiple QPs per GPU pair, diversifying the 5-tuple space
 
 ---
 

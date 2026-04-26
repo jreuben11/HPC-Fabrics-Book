@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Storage in an AI cluster is not a secondary concern — it is a first-class networking problem. A 1000-GPU training run generates checkpoint writes that, when issued simultaneously from all ranks, constitute an 800 GB burst hitting the storage fabric in seconds. Dataset streaming for the next training epoch begins the moment the previous one ends. Model weights must be loaded into GPU memory before the first forward pass can begin. Each of these workloads has fundamentally different access patterns, latency tolerances, and bandwidth requirements, and a storage architecture that optimizes for one will be suboptimal or actively harmful for the others.
+
+This chapter examines the open-source and commercial storage systems deployed in production AI clusters, analyzing each through the lens of what it demands from the network fabric and how well it serves the three canonical storage workloads: dataset streaming, checkpointing, and model serving. The systems covered span the full spectrum: Ceph provides a unified POSIX/block/object platform on commodity hardware; Lustre delivers HPC-grade parallel throughput optimized for large sequential I/O across thousands of simultaneous clients; DAOS (Distributed Asynchronous Object Storage) eliminates the OS I/O stack entirely using SPDK and Storage Class Memory to achieve sub-100 microsecond checkpoint latency; WEKA (WekaFS) combines DPDK-accelerated networking with direct NVMe access to close the performance gap between Lustre and DAOS without requiring specialized hardware; and MinIO provides the S3-compatible object interface that every ML framework already speaks.
+
+A thread running through all these systems is the relationship between storage and training fabric topology. Checkpoint traffic and gradient AllReduce traffic must not share bandwidth — a simultaneous checkpoint from a thousand GPUs will saturate any shared uplink and stall AllReduce operations in the most performance-critical phase of training. This chapter explains how to design storage network isolation using separate VLANs or physical switching, and how to configure QoS priority classes so that storage traffic yields to gradient traffic when contention occurs.
+
+Readers will learn the architecture of each system, its configuration for AI workloads, the PromQL metrics to watch for storage-induced training stalls, and how to benchmark each tier with fio to establish per-system throughput baselines.
+
+This chapter connects directly to Chapter 6 (SPDK/NVMe-oF, on which DAOS's I/O path is built), Chapter 7 (eBPF/XDP for storage-traffic policing), and Chapter 20 (distributed training fabric demands, which quantifies exactly how much checkpoint bandwidth a given model size requires). Chapter 19 (GPU collective communications) explains the AllReduce patterns that storage traffic must not disrupt.
+
+---
+
+---
+
 ## Installation
+
+This chapter benchmarks and compares five storage systems across the three canonical AI cluster workloads, so each must be installed and reachable from the same test host. Ceph is bootstrapped via cephadm, which deploys and manages the full suite of monitor, manager, OSD, and MDS daemons as containers, providing the unified POSIX/block/object platform used for general-purpose cluster storage. The Lustre client and server packages are installed to exercise the parallel file system that underpins most HPC-origin AI clusters and delivers the high sequential throughput that dataset streaming requires. The DAOS client libraries are installed to evaluate SPDK-based object storage that bypasses the OS I/O stack entirely for sub-100-microsecond checkpoint commit latency. MinIO is deployed as a single-node S3-compatible server to serve as the object-storage tier that ML frameworks address via standard boto3 or s3fs interfaces. The fio benchmarking tool is installed across all tiers to produce consistent, comparable throughput and latency baselines under sequential, random, and mixed read/write profiles that correspond to the actual access patterns of training, checkpointing, and model loading.
 
 ### System packages (Ubuntu 24.04)
 
@@ -68,20 +86,6 @@ python -c "import boto3; print(boto3.__version__)"
 # weka version
 # Note: Lab exercises use fio against local NVMe as a stand-in
 ```
-
----
-
-## Introduction
-
-Storage in an AI cluster is not a secondary concern — it is a first-class networking problem. A 1000-GPU training run generates checkpoint writes that, when issued simultaneously from all ranks, constitute an 800 GB burst hitting the storage fabric in seconds. Dataset streaming for the next training epoch begins the moment the previous one ends. Model weights must be loaded into GPU memory before the first forward pass can begin. Each of these workloads has fundamentally different access patterns, latency tolerances, and bandwidth requirements, and a storage architecture that optimizes for one will be suboptimal or actively harmful for the others.
-
-This chapter examines the open-source and commercial storage systems deployed in production AI clusters, analyzing each through the lens of what it demands from the network fabric and how well it serves the three canonical storage workloads: dataset streaming, checkpointing, and model serving. The systems covered span the full spectrum: Ceph provides a unified POSIX/block/object platform on commodity hardware; Lustre delivers HPC-grade parallel throughput optimized for large sequential I/O across thousands of simultaneous clients; DAOS (Distributed Asynchronous Object Storage) eliminates the OS I/O stack entirely using SPDK and Storage Class Memory to achieve sub-100 microsecond checkpoint latency; WEKA (WekaFS) combines DPDK-accelerated networking with direct NVMe access to close the performance gap between Lustre and DAOS without requiring specialized hardware; and MinIO provides the S3-compatible object interface that every ML framework already speaks.
-
-A thread running through all these systems is the relationship between storage and training fabric topology. Checkpoint traffic and gradient AllReduce traffic must not share bandwidth — a simultaneous checkpoint from a thousand GPUs will saturate any shared uplink and stall AllReduce operations in the most performance-critical phase of training. This chapter explains how to design storage network isolation using separate VLANs or physical switching, and how to configure QoS priority classes so that storage traffic yields to gradient traffic when contention occurs.
-
-Readers will learn the architecture of each system, its configuration for AI workloads, the PromQL metrics to watch for storage-induced training stalls, and how to benchmark each tier with fio to establish per-system throughput baselines.
-
-This chapter connects directly to Chapter 6 (SPDK/NVMe-oF, on which DAOS's I/O path is built), Chapter 7 (eBPF/XDP for storage-traffic policing), and Chapter 20 (distributed training fabric demands, which quantifies exactly how much checkpoint bandwidth a given model size requires). Chapter 19 (GPU collective communications) explains the AllReduce patterns that storage traffic must not disrupt.
 
 ---
 

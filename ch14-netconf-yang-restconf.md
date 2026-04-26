@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Every device in an AI cluster fabric — spine switches, leaf switches, DPU-equipped servers, storage nodes — must be configured consistently and kept in a known, verifiable state. At the scale of a large GPU cluster, this configuration surface spans thousands of interfaces, BGP sessions, VRFs, ACLs, and QoS policies. The traditional approach — SSHing into devices and running CLI commands, then parsing the text output with regular expressions — is not just tedious; it is structurally incompatible with automation. CLI output formats change between NOS versions, parsing is brittle, and there is no notion of a transaction, a rollback, or a schema that defines what valid configuration looks like.
+
+Model-driven network management replaces CLI scraping with a three-layer architecture. YANG (Yet Another Next Generation, RFC 7950) is the data modeling language: it defines the schema — what leaf nodes, lists, containers, and constraints exist on a device. NETCONF (RFC 6241) is the configuration protocol: it carries YANG-structured XML over SSH, with explicit datastores (candidate, running, startup), transactional commit semantics, and a discard-changes rollback primitive. RESTCONF (RFC 8040) exposes the same YANG model over HTTP using JSON or XML, enabling REST-native tooling to read and write device configuration using the same schema as NETCONF.
+
+Together, these three technologies form the foundation of modern network automation pipelines. Configuration changes become version-controlled, schema-validated transactions. The diff between a golden desired state and the current running configuration is computable in structured data, not fragile text. Rollbacks are a single `<discard-changes>` RPC rather than manually reverting a patchwork of CLI commands. OpenConfig extends this by providing vendor-neutral YANG models for common functions — BGP, interfaces, platform resources — so the same automation code works across vendor equipment.
+
+The reader will leave this chapter able to write and validate YANG modules with `pyang` and `yanglint`, automate NETCONF configuration workflows with Python's `ncclient` library, and issue RESTCONF reads and writes with `curl`. The lab walkthrough uses Nokia SR Linux — available as a free container image — as the NETCONF/RESTCONF target, performing a full configure-validate-commit-rollback cycle.
+
+This chapter begins Part V and connects directly forward to Chapter 15, which replaces NETCONF's polling model with gNMI streaming telemetry — using the same OpenConfig YANG path namespace introduced here as the addressing scheme for real-time metric subscriptions.
+
+---
+
+---
+
 ## Installation
+
+ncclient is the Python NETCONF client used throughout the chapter to open sessions, send edit-config RPCs to the candidate datastore, commit, and discard changes. pyang validates YANG module syntax and renders model trees in a human-readable format, while xmltodict bridges the XML that NETCONF returns into Python dictionaries for structured comparison with deepdiff. Containerlab with a Nokia SR Linux node provides the NETCONF/RESTCONF target, since SR Linux supports candidate datastores and transactional commits out of the box and is freely available as a container image. These tools together cover the full automation workflow: model validation, programmatic configuration, and schema-aware diffing against a golden desired state.
 
 ### System Packages (Ubuntu 24.04)
 
@@ -40,20 +58,6 @@ pyang --version
 yanglint --version
 # yanglint SO 2.x.x
 ```
-
----
-
-## Introduction
-
-Every device in an AI cluster fabric — spine switches, leaf switches, DPU-equipped servers, storage nodes — must be configured consistently and kept in a known, verifiable state. At the scale of a large GPU cluster, this configuration surface spans thousands of interfaces, BGP sessions, VRFs, ACLs, and QoS policies. The traditional approach — SSHing into devices and running CLI commands, then parsing the text output with regular expressions — is not just tedious; it is structurally incompatible with automation. CLI output formats change between NOS versions, parsing is brittle, and there is no notion of a transaction, a rollback, or a schema that defines what valid configuration looks like.
-
-Model-driven network management replaces CLI scraping with a three-layer architecture. YANG (Yet Another Next Generation, RFC 7950) is the data modeling language: it defines the schema — what leaf nodes, lists, containers, and constraints exist on a device. NETCONF (RFC 6241) is the configuration protocol: it carries YANG-structured XML over SSH, with explicit datastores (candidate, running, startup), transactional commit semantics, and a discard-changes rollback primitive. RESTCONF (RFC 8040) exposes the same YANG model over HTTP using JSON or XML, enabling REST-native tooling to read and write device configuration using the same schema as NETCONF.
-
-Together, these three technologies form the foundation of modern network automation pipelines. Configuration changes become version-controlled, schema-validated transactions. The diff between a golden desired state and the current running configuration is computable in structured data, not fragile text. Rollbacks are a single `<discard-changes>` RPC rather than manually reverting a patchwork of CLI commands. OpenConfig extends this by providing vendor-neutral YANG models for common functions — BGP, interfaces, platform resources — so the same automation code works across vendor equipment.
-
-The reader will leave this chapter able to write and validate YANG modules with `pyang` and `yanglint`, automate NETCONF configuration workflows with Python's `ncclient` library, and issue RESTCONF reads and writes with `curl`. The lab walkthrough uses Nokia SR Linux — available as a free container image — as the NETCONF/RESTCONF target, performing a full configure-validate-commit-rollback cycle.
-
-This chapter begins Part V and connects directly forward to Chapter 15, which replaces NETCONF's polling model with gNMI streaming telemetry — using the same OpenConfig YANG path namespace introduced here as the addressing scheme for real-time metric subscriptions.
 
 ---
 

@@ -4,49 +4,6 @@
 
 ---
 
-## Installation
-
-### System packages
-
-```bash
-sudo apt install -y frr iproute2 tcpdump rdma-core libibverbs-dev perftest \
-    containerlab jq bc
-```
-
-Enable FRR daemons (BFD and BGP are needed for this chapter):
-
-```bash
-sudo sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
-sudo sed -i 's/^bfdd=no/bfdd=yes/' /etc/frr/daemons
-sudo systemctl enable --now frr
-```
-
-### Python environment
-
-```bash
-uv venv .venv && source .venv/bin/activate
-uv pip install torch torchvision paramiko prometheus-client
-# paramiko: pure-Python SSH2 library, used here to programmatically inject faults via SSH into network nodes
-# prometheus-client: official Python Prometheus client library for exposing metrics via an HTTP /metrics endpoint
-python -c "import torch, paramiko, prometheus_client; print('OK')"
-```
-
-### Verify RDMA tooling
-
-`rdma-core` is the Linux RDMA userspace library stack, and `libibverbs-dev` provides the `ibverbs` API headers and development libraries for writing RDMA applications; together they supply the `rdma`, `ibv_devinfo`, and related tools. `perftest` is a collection of RDMA performance test utilities (including `ib_send_bw`, `ib_read_bw`, and `ib_write_bw`) used to benchmark and verify RDMA link throughput and latency.
-
-```bash
-rdma link show
-# link mlx5_0/1 state ACTIVE physical_state POLLING netdev enp1s0f0
-ibv_devinfo | head -4
-# hca_id: mlx5_0
-#   transport:                      InfiniBand (0)
-#   fw_ver:                         20.35.1012
-#   node_guid:                      e41d:2d03:0065:c1e0
-```
-
----
-
 ## Introduction
 
 Distributed training jobs fail differently from web services. A web service can tolerate one backend going down because requests are independent — the load balancer simply stops sending traffic to the failed backend. A training job is a single synchronous computation spread across hundreds of GPUs, and every rank must complete every AllReduce before any rank can advance. When one rank's network link fails, every other rank blocks. When all ranks block, the entire cluster's GPU time is wasted until either the job dies or a watchdog fires.
@@ -87,6 +44,53 @@ The `NCCL_TIMEOUT` environment variable sets the watchdog timeout in millisecond
 ### Checkpoint Loss
 
 If a rank failure occurs in the middle of a checkpoint write — particularly a synchronous write where all ranks write in lockstep — the partially written checkpoint may be corrupted. Resuming from a corrupted checkpoint causes the job to fail again immediately on restart. Async checkpointing and atomic rename patterns prevent this.
+
+---
+
+---
+
+## Installation
+
+FRR is the central dependency, providing both the BFD daemon (`bfdd`) for sub-second link-failure detection and the BGP daemon (`bgpd`) that withdraws routes once BFD declares a session down. The `rdma-core` and `perftest` packages supply the `ibv_*` verbs libraries and tools such as `ib_write_bw` that are used to inject RDMA traffic and observe QP retry and timeout behavior under simulated link loss. Prometheus and Alertmanager are deployed as Docker containers to collect RDMA counters exported by the `rdma-exporter` and fire alerts when retry rates exceed thresholds. PyTorch with `torchrun` is required for the elastic training recovery lab — it is assumed to be present in the Python environment or can be installed via pip, as it is too large for an apt package.
+
+### System packages
+
+```bash
+sudo apt install -y frr iproute2 tcpdump rdma-core libibverbs-dev perftest \
+    containerlab jq bc
+```
+
+Enable FRR daemons (BFD and BGP are needed for this chapter):
+
+```bash
+sudo sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
+sudo sed -i 's/^bfdd=no/bfdd=yes/' /etc/frr/daemons
+sudo systemctl enable --now frr
+```
+
+### Python environment
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install torch torchvision paramiko prometheus-client
+# paramiko: pure-Python SSH2 library, used here to programmatically inject faults via SSH into network nodes
+# prometheus-client: official Python Prometheus client library for exposing metrics via an HTTP /metrics endpoint
+python -c "import torch, paramiko, prometheus_client; print('OK')"
+```
+
+### Verify RDMA tooling
+
+`rdma-core` is the Linux RDMA userspace library stack, and `libibverbs-dev` provides the `ibverbs` API headers and development libraries for writing RDMA applications; together they supply the `rdma`, `ibv_devinfo`, and related tools. `perftest` is a collection of RDMA performance test utilities (including `ib_send_bw`, `ib_read_bw`, and `ib_write_bw`) used to benchmark and verify RDMA link throughput and latency.
+
+```bash
+rdma link show
+# link mlx5_0/1 state ACTIVE physical_state POLLING netdev enp1s0f0
+ibv_devinfo | head -4
+# hca_id: mlx5_0
+#   transport:                      InfiniBand (0)
+#   fw_ver:                         20.35.1012
+#   node_guid:                      e41d:2d03:0065:c1e0
+```
 
 ---
 

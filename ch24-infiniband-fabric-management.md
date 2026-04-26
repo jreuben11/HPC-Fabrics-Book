@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Chapter 24 covers InfiniBand fabric management from first principles — the transport model that distinguishes IB from RoCEv2, the Subnet Manager that is IB's central architectural feature, the diagnostic tools that expose fabric health and routing state, and the Priority Flow Control mechanism that must be correctly configured for lossless RDMA. The Lab Walkthrough instantiates a two-node InfiniBand fabric using the `rdma_rxe` software HCA module, runs OpenSM to assign LIDs and program forwarding tables, and validates performance with the perftest benchmark suite.
+
+InfiniBand occupies a distinct position in the AI infrastructure landscape. While the industry trend toward RoCEv2 on commodity Ethernet is real and accelerating, IB retains dominance in on-premises HPC and AI installations where fabric management predictability, sub-microsecond latency, and native lossless operation outweigh the switch cost premium. Understanding IB fabric management is also directly useful for RoCEv2 operations: the same LID-based addressing, the same MAD-based diagnostics, and the same PFC lossless requirements appear in both transport families, and the tooling (`ibstat`, `ibnetdiscover`, `perfquery`) is shared across both.
+
+Chapter 23 covered simulation tools including NS-3's RdmaHw module, which models the exact DCQCN and ECN thresholds discussed in Sections 24.5–24.6. Chapter 24 deals with the physical reality those simulations represent. Chapter 25 extends RDMA management to the cloud — AWS EFA, Azure RDMA, and GCP TCPX — where the fabric is managed by the cloud provider but the host-side configuration remains the operator's responsibility.
+
+The Subnet Manager is what makes IB distinct. Every IB port in the fabric is in the `INIT` state at power-on; without a running SM, no data path is operational. The SM discovers the topology via directed-route MADs, assigns 16-bit LIDs to every port, computes full mesh paths using a configurable routing algorithm (FTREE, LASH, DOR), and programs Linear Forwarding Tables into every switch. SM failover, sweep interval tuning, and partition key management are therefore critical operational disciplines rather than optional optimizations.
+
+Section 24.1 contrasts the IB and RoCEv2 transport models at the architectural level. Sections 24.2–24.3 cover OpenSM operation and the MAD-based diagnostic suite. Section 24.4 explains fat-tree routing algorithms. Section 24.5 addresses Priority Flow Control. Section 24.6 covers performance counter monitoring. Section 24.7 describes the Soft-IB kernel module used throughout the Lab Walkthrough.
+
+---
+
+---
+
 ## Installation
+
+The `opensm` and `opensm-utils` packages provide the OpenSM Subnet Manager, which is the mandatory control-plane component that assigns LIDs, computes routing tables, and programs Linear Forwarding Tables into every switch; without a running SM, all IB ports remain in the `INIT` state and no data path is operational. The `infiniband-diags` package supplies the diagnostic suite — `ibnetdiscover`, `ibdiagnet`, `perfquery`, `ibstat`, and `ibping` — which speak MAD-based management protocols to enumerate fabric topology, detect link errors, and collect 64-bit performance counters. The `perftest` package provides the `ib_write_bw`, `ib_read_bw`, and `ib_write_lat` benchmarks used throughout the lab walkthrough to exercise RDMA verbs and validate end-to-end fabric performance. The `rdma_rxe` kernel module implements a full software InfiniBand HCA on top of any Ethernet interface and serves as the lab stand-in for a physical HCA in all SM and diagnostic exercises.
 
 ### System Packages (Ubuntu 24.04)
 
@@ -69,20 +87,6 @@ uv run python -c "import prometheus_client, pandas; print('prometheus_client:', 
 # Expected:
 # prometheus_client: 0.20.x   pandas: 2.x.x
 ```
-
----
-
-## Introduction
-
-Chapter 24 covers InfiniBand fabric management from first principles — the transport model that distinguishes IB from RoCEv2, the Subnet Manager that is IB's central architectural feature, the diagnostic tools that expose fabric health and routing state, and the Priority Flow Control mechanism that must be correctly configured for lossless RDMA. The Lab Walkthrough instantiates a two-node InfiniBand fabric using the `rdma_rxe` software HCA module, runs OpenSM to assign LIDs and program forwarding tables, and validates performance with the perftest benchmark suite.
-
-InfiniBand occupies a distinct position in the AI infrastructure landscape. While the industry trend toward RoCEv2 on commodity Ethernet is real and accelerating, IB retains dominance in on-premises HPC and AI installations where fabric management predictability, sub-microsecond latency, and native lossless operation outweigh the switch cost premium. Understanding IB fabric management is also directly useful for RoCEv2 operations: the same LID-based addressing, the same MAD-based diagnostics, and the same PFC lossless requirements appear in both transport families, and the tooling (`ibstat`, `ibnetdiscover`, `perfquery`) is shared across both.
-
-Chapter 23 covered simulation tools including NS-3's RdmaHw module, which models the exact DCQCN and ECN thresholds discussed in Sections 24.5–24.6. Chapter 24 deals with the physical reality those simulations represent. Chapter 25 extends RDMA management to the cloud — AWS EFA, Azure RDMA, and GCP TCPX — where the fabric is managed by the cloud provider but the host-side configuration remains the operator's responsibility.
-
-The Subnet Manager is what makes IB distinct. Every IB port in the fabric is in the `INIT` state at power-on; without a running SM, no data path is operational. The SM discovers the topology via directed-route MADs, assigns 16-bit LIDs to every port, computes full mesh paths using a configurable routing algorithm (FTREE, LASH, DOR), and programs Linear Forwarding Tables into every switch. SM failover, sweep interval tuning, and partition key management are therefore critical operational disciplines rather than optional optimizations.
-
-Section 24.1 contrasts the IB and RoCEv2 transport models at the architectural level. Sections 24.2–24.3 cover OpenSM operation and the MAD-based diagnostic suite. Section 24.4 explains fat-tree routing algorithms. Section 24.5 addresses Priority Flow Control. Section 24.6 covers performance counter monitoring. Section 24.7 describes the Soft-IB kernel module used throughout the Lab Walkthrough.
 
 ---
 

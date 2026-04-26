@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Modern GPU servers contain an architectural tension: the host CPU must simultaneously feed data to the GPUs, manage container networking overhead, enforce security policy, and export telemetry — while also not impeding the GPUs' primary work. In practice, a busy OVS (Open vSwitch) instance or an active IPsec termination can consume 2–4 CPU cores per host, a significant fraction of the total CPU budget on a 2-socket server. The DPU (Data Processing Unit) resolves this tension by moving network processing off the host CPU entirely.
+
+A DPU is a SmartNIC that integrates a high-performance NIC ASIC with a full general-purpose compute subsystem — ARM cores, local DRAM, and PCIe connectivity to the host — on a single card. From the host's perspective, a DPU appears as a standard PCIe NIC with SR-IOV virtual functions. From the fabric's perspective, it is a 400 Gbps network endpoint. On the DPU itself, a full Linux environment runs an independent software stack: OVS-DPDK for virtual switching, RDMA proxy for multi-tenant isolation, IPsec for encryption, and telemetry agents — all without consuming a single host CPU cycle.
+
+This chapter covers the DPU architecture using NVIDIA BlueField-3 as the primary reference, the DOCA (Data Center Infrastructure on a Chip Architecture) SDK for DPU application development, OVS-DPDK offload to the DPU ARM cores, eBPF offload to NIC silicon, and P4/PNA programs on SmartNIC targets such as AMD Pensando DSC. Each technology is placed in the context of AI cluster deployment patterns: which workloads belong on the DPU, which stay on the host, and how the DPU's management isolation enables secure multi-tenant GPU infrastructure.
+
+The lab walkthrough uses OVS-DPDK running on the host as a functional stand-in for DPU OVS — the architecture, configuration, and observability tooling are identical — and the DOCA development container to compile a flow steering example without requiring physical BlueField hardware.
+
+This chapter sits at the intersection of Part II (Kernel-Bypass & Programmable I/O) and Part III (Programmable Fabric): the DPU is the natural convergence point for DPDK (Chapter 5), eBPF/XDP (Chapter 7), and P4 (Chapter 9), applied at the host edge rather than in the fabric switches. It connects forward to Chapter 26 (Network Security & Zero Trust), where the DPU's isolation properties enable the cryptographic separation required for secure AI infrastructure.
+
+---
+
+---
+
 ## Installation
+
+The `openvswitch-dpdk` package installs OVS-DPDK, which serves as a host-side functional stand-in for the OVS-DPDK instance that runs on a real DPU's ARM cores; its configuration, OpenFlow control, and PMD statistics interfaces are identical to the DPU deployment. The NVIDIA DOCA SDK is available either via the NVIDIA apt repository on physical BlueField hardware, or as the `nvcr.io/nvidia/doca/doca:2.6.0-devel` container image that provides the full DOCA headers and libraries for compiling flow-steering applications without requiring a physical card. CMake and `pkg-config` are needed to build the DOCA C example, and `grpcio` is installed to support the Python telemetry scripts that communicate with DOCA's gRPC telemetry service.
 
 ### OVS-DPDK (host-side stand-in for DPU OVS)
 
@@ -91,20 +109,6 @@ cmake ..
 make -j$(nproc)
 # [100%] Built target flow_steer
 ```
-
----
-
-## Introduction
-
-Modern GPU servers contain an architectural tension: the host CPU must simultaneously feed data to the GPUs, manage container networking overhead, enforce security policy, and export telemetry — while also not impeding the GPUs' primary work. In practice, a busy OVS (Open vSwitch) instance or an active IPsec termination can consume 2–4 CPU cores per host, a significant fraction of the total CPU budget on a 2-socket server. The DPU (Data Processing Unit) resolves this tension by moving network processing off the host CPU entirely.
-
-A DPU is a SmartNIC that integrates a high-performance NIC ASIC with a full general-purpose compute subsystem — ARM cores, local DRAM, and PCIe connectivity to the host — on a single card. From the host's perspective, a DPU appears as a standard PCIe NIC with SR-IOV virtual functions. From the fabric's perspective, it is a 400 Gbps network endpoint. On the DPU itself, a full Linux environment runs an independent software stack: OVS-DPDK for virtual switching, RDMA proxy for multi-tenant isolation, IPsec for encryption, and telemetry agents — all without consuming a single host CPU cycle.
-
-This chapter covers the DPU architecture using NVIDIA BlueField-3 as the primary reference, the DOCA (Data Center Infrastructure on a Chip Architecture) SDK for DPU application development, OVS-DPDK offload to the DPU ARM cores, eBPF offload to NIC silicon, and P4/PNA programs on SmartNIC targets such as AMD Pensando DSC. Each technology is placed in the context of AI cluster deployment patterns: which workloads belong on the DPU, which stay on the host, and how the DPU's management isolation enables secure multi-tenant GPU infrastructure.
-
-The lab walkthrough uses OVS-DPDK running on the host as a functional stand-in for DPU OVS — the architecture, configuration, and observability tooling are identical — and the DOCA development container to compile a flow steering example without requiring physical BlueField hardware.
-
-This chapter sits at the intersection of Part II (Kernel-Bypass & Programmable I/O) and Part III (Programmable Fabric): the DPU is the natural convergence point for DPDK (Chapter 5), eBPF/XDP (Chapter 7), and P4 (Chapter 9), applied at the host edge rather than in the fabric switches. It connects forward to Chapter 26 (Network Security & Zero Trust), where the DPU's isolation properties enable the cryptographic separation required for secure AI infrastructure.
 
 ---
 

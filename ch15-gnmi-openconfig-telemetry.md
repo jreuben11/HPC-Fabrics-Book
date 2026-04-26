@@ -4,7 +4,25 @@
 
 ---
 
+## Introduction
+
+Monitoring a thousand-node AI training cluster in real time is not an optional operational nicety — it is a prerequisite for maintaining training efficiency. A single congested switch port, a flapping BGP session, or a rising tail-drop rate on one of sixteen ECMP paths can silently stall a distributed all-reduce collective for hundreds of milliseconds, degrading GPU utilization across the entire job. Detecting and diagnosing these events requires telemetry at sub-second granularity, structured in a way that can be queried, alerted on, and visualized without vendor-specific parsing.
+
+gNMI (gRPC Network Management Interface) is the streaming telemetry protocol designed for this purpose. It runs over gRPC — Google's high-performance RPC framework built on HTTP/2 and Protocol Buffers — and uses the OpenConfig YANG path namespace introduced in Chapter 14 as its addressing scheme. Instead of the poll-based SNMP model where a management station asks each device for counters every five minutes, gNMI uses persistent subscription streams: the collector subscribes to a set of OpenConfig paths, and the device pushes updates at the specified interval or whenever a value changes. This inversion eliminates polling overhead on the device, reduces latency from minutes to seconds or less, and delivers structured, self-describing data.
+
+This chapter covers the gNMI protocol's four RPCs and subscription modes, the `gnmic` CLI and collector tool, the OpenConfig path namespace for interface counters, BGP state, and hardware telemetry, the complete production telemetry pipeline from switch to Grafana dashboard, and dial-out telemetry for firewall-constrained environments. PromQL expressions for AI cluster-specific monitoring — congestion detection, BGP session stability, ECMP imbalance — are derived from first principles.
+
+The lab walkthrough builds a complete end-to-end pipeline: a Containerlab SR Linux node generates live interface counters and BGP state change events; `gnmic` subscribes with both sampled and on-change modes; Prometheus scrapes the gnmic Prometheus endpoint; and a PromQL query computes real-time throughput in Gbps as iperf3 generates traffic. An on-change BGP subscription demonstrates how state transitions as short as 500 ms are captured reliably.
+
+This chapter closes Part V. Chapter 16 builds on the telemetry foundation established here by integrating gNMI metrics into a full-stack observability platform alongside OpenTelemetry traces, Prometheus alerting, and Grafana dashboards — adding the application-layer signals from AI training frameworks that sit above the network layer.
+
+---
+
+---
+
 ## Installation
+
+gnmic is the gNMI CLI and collector that drives all protocol interaction in this chapter: it issues Capabilities and Get requests for one-shot inspection, and runs a persistent Subscribe session that exposes collected metrics as a Prometheus endpoint. Prometheus scrapes that endpoint and stores the time-series data; Grafana connects to Prometheus as a datasource and renders the dashboards and PromQL-based alerts used to detect congestion and BGP session instability. Containerlab with a Nokia SR Linux node provides the gNMI target, since SR Linux ships with a gNMI server that supports both sampled and on-change subscriptions over OpenConfig paths. The complete pipeline — SR Linux generating live counters, gnmic collecting them, Prometheus storing them, and Grafana visualizing them — is what the lab walkthrough builds end to end.
 
 ### System packages (Ubuntu 24.04)
 
@@ -33,20 +51,6 @@ bash -c "$(curl -sL https://get.containerlab.dev)"
 uv venv .venv && source .venv/bin/activate
 uv pip install prometheus-client grpcio grpcio-tools protobuf pyyaml
 ```
-
----
-
-## Introduction
-
-Monitoring a thousand-node AI training cluster in real time is not an optional operational nicety — it is a prerequisite for maintaining training efficiency. A single congested switch port, a flapping BGP session, or a rising tail-drop rate on one of sixteen ECMP paths can silently stall a distributed all-reduce collective for hundreds of milliseconds, degrading GPU utilization across the entire job. Detecting and diagnosing these events requires telemetry at sub-second granularity, structured in a way that can be queried, alerted on, and visualized without vendor-specific parsing.
-
-gNMI (gRPC Network Management Interface) is the streaming telemetry protocol designed for this purpose. It runs over gRPC — Google's high-performance RPC framework built on HTTP/2 and Protocol Buffers — and uses the OpenConfig YANG path namespace introduced in Chapter 14 as its addressing scheme. Instead of the poll-based SNMP model where a management station asks each device for counters every five minutes, gNMI uses persistent subscription streams: the collector subscribes to a set of OpenConfig paths, and the device pushes updates at the specified interval or whenever a value changes. This inversion eliminates polling overhead on the device, reduces latency from minutes to seconds or less, and delivers structured, self-describing data.
-
-This chapter covers the gNMI protocol's four RPCs and subscription modes, the `gnmic` CLI and collector tool, the OpenConfig path namespace for interface counters, BGP state, and hardware telemetry, the complete production telemetry pipeline from switch to Grafana dashboard, and dial-out telemetry for firewall-constrained environments. PromQL expressions for AI cluster-specific monitoring — congestion detection, BGP session stability, ECMP imbalance — are derived from first principles.
-
-The lab walkthrough builds a complete end-to-end pipeline: a Containerlab SR Linux node generates live interface counters and BGP state change events; `gnmic` subscribes with both sampled and on-change modes; Prometheus scrapes the gnmic Prometheus endpoint; and a PromQL query computes real-time throughput in Gbps as iperf3 generates traffic. An on-change BGP subscription demonstrates how state transitions as short as 500 ms are captured reliably.
-
-This chapter closes Part V. Chapter 16 builds on the telemetry foundation established here by integrating gNMI metrics into a full-stack observability platform alongside OpenTelemetry traces, Prometheus alerting, and Grafana dashboards — adding the application-layer signals from AI training frameworks that sit above the network layer.
 
 ---
 
