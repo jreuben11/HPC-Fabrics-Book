@@ -1,4 +1,4 @@
-# The Open AI Network Stack
+# The AI Cluster Network Stack
 ### *Building High-Performance Fabrics for GPU Clusters from First Principles*
 
 The network is the bottleneck. Every large-scale AI training run eventually hits the same wall: GPUs sit idle, not because they lack compute, but because the fabric between them cannot deliver data fast enough. This book is a vertical integration guide for the open-source tools that fix that — from the RDMA transport model at the bottom through kernel-bypass I/O, programmable fabrics, container networking, model-driven management, distributed storage, and the testing frameworks that let you validate the whole stack before touching production hardware.
