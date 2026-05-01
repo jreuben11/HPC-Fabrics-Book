@@ -1,4 +1,4 @@
-# Front Matter — *The Open AI Network Stack*
+# Front Matter — *The AI Cluster Network Stack*
 ### *Building High-Performance Fabrics for GPU Clusters from First Principles*
 
 ---
@@ -9,11 +9,11 @@ The network is the bottleneck.
 
 Every large-scale AI training run eventually hits the same wall: GPUs sit idle, not because they lack compute, but because the fabric between them cannot deliver data fast enough. A 4096-GPU cluster running a 70B-parameter model spends more wall-clock time waiting for AllReduce gradients than it does on forward and backward passes. The difference between a well-tuned fabric and a mediocre one is not 5%—it is 2×, sometimes more.
 
-This book exists because the tools to build a world-class AI networking stack are now entirely open source, but they are scattered across a dozen communities with different vocabularies, different hardware assumptions, and almost no cross-pollination. An engineer who knows InfiniBand may not know eBPF. An engineer who knows Kubernetes networking may not know RDMA verbs. A network engineer moving into AI infrastructure may know BGP cold but have never heard of DCQCN or SHARP.
+This book exists because the tools to build a world-class AI networking stack are now entirely open source, but they are scattered across a dozen communities with different vocabularies, different hardware assumptions, and almost no cross-pollination. An engineer who knows **InfiniBand** may not know **eBPF**. An engineer who knows Kubernetes networking may not know **RDMA verbs**. A network engineer moving into AI infrastructure may know **BGP** cold but have never heard of **DCQCN** or **SHARP**.
 
-*The Open AI Network Stack* is a vertical integration guide. It starts at the RDMA transport model—the substrate everything else depends on—and builds upward through kernel-bypass I/O, programmable fabrics, container networking, model-driven management, distributed storage, and finally the testing and simulation frameworks that let you validate the whole stack before touching production hardware. Every layer is treated as software: version-controlled, CI-tested, observable, and replaceable.
+*The AI Cluster Network Stack* is a vertical integration guide. It starts at the **RDMA transport model**—the substrate everything else depends on—and builds upward through **kernel-bypass I/O**, **programmable fabrics**, **container networking**, **model-driven management**, **distributed storage**, and finally the **testing and simulation** frameworks that let you validate the whole stack before touching production hardware. Every layer is treated as software: version-controlled, CI-tested, observable, and replaceable.
 
-The organizing principle is **disaggregation**: the deliberate dismantling of the closed, monolithic network appliance into separable, open, composable layers. UCX and LibFabric decouple transport semantics from hardware; DPDK and SPDK eject the kernel from the I/O path; eBPF extends programmability deep into Linux without leaving it; SONiC and SR Linux replace proprietary NOSes with systems that expose the ASIC through open APIs; P4 makes the forwarding pipeline itself a software artifact. The result is a network fabric that can be expressed as code—and treated with the same engineering discipline as any other software system.
+The organizing principle is **disaggregation**: the deliberate dismantling of the closed, monolithic network appliance into separable, open, composable layers. **UCX** and **LibFabric** decouple transport semantics from hardware; **DPDK** and **SPDK** eject the kernel from the I/O path; **eBPF** extends programmability deep into Linux without leaving it; **SONiC** and **SR Linux** replace proprietary NOSes with systems that expose the ASIC through open APIs; **P4** makes the forwarding pipeline itself a software artifact. The result is a network fabric that can be expressed as code—and treated with the same engineering discipline as any other software system.
 
 ---
 
@@ -24,8 +24,8 @@ The book is organized into seven parts, each building on the previous:
 - **Part I — Foundations** covers the invariants every other chapter depends on: cluster topology, the RDMA transport model, clock synchronization, and interconnect abstractions.
 - **Part II — Kernel-Bypass & I/O** removes OS overhead from both the network and storage paths.
 - **Part III — Programmable Fabric** treats the network itself as software: open NOSes, P4, SmartNIC/DPU SDKs, and traffic engineering.
-- **Part IV — Overlay & Kubernetes Networking** wires GPU pods into the fabric through container networking, BGP-EVPN overlays, and security primitives.
-- **Part V — Management, Telemetry & Control** covers model-driven configuration (NETCONF/YANG, gNMI) and the observability pipeline (OpenTelemetry, Prometheus, Grafana).
+- **Part IV — Overlay & Kubernetes Networking** wires GPU pods into the fabric through container networking, **BGP-EVPN** overlays, and security primitives.
+- **Part V — Management, Telemetry & Control** covers model-driven configuration (**NETCONF/YANG**, **gNMI**) and the observability pipeline (**OpenTelemetry**, **Prometheus**, **Grafana**).
 - **Part VI — Storage & Adjacent Infrastructure** covers the storage fabrics that feed training pipelines and the collective communication interface.
 - **Part VII — Testing, Emulation, Simulation & Resilience** closes the loop: validating the full stack in software and keeping it healthy in production.
 
@@ -39,15 +39,15 @@ The book is organized into seven parts, each building on the previous:
 | Security engineer | Part I (ch1–2) → Part IV (ch26) → Part V (ch15) |
 | Full stack — read cover to cover | Parts I through VII in order |
 
-Each chapter includes hands-on lab exercises. All labs are designed to run on a single laptop using Containerlab with container images pulled from public registries. No physical hardware is required.
+Each chapter includes hands-on lab walkthroughs. All labs are designed to run on a single laptop using **Containerlab** with container images pulled from public registries. No physical hardware is required.
 
-Chapters 19 and 20 are intentionally brief: GPU collective communications and distributed training runtimes are treated in companion investigations that go into the same depth as this book. Cross-references are provided.
+Chapters 19 and 20 are intentionally brief: **GPU collective communications** and **distributed training runtimes** are treated in companion investigations that go into the same depth as this book. Cross-references are provided.
 
 ---
 
 ## Lab Environment Setup
 
-All hands-on exercises use **Containerlab** to define and deploy multi-NOS network topologies as Docker containers. The three primary NOS images used throughout the book are:
+All hands-on exercises use **Containerlab** to define and deploy multi-NOS network topologies as Docker containers. [Containerlab](https://containerlab.dev/) provides a fast, lightweight, and Git-friendly way to build networking labs using containerized network operating systems (NOS). It enables "Lab as Code" with Docker-based orchestration, making it ideal for automating multi-vendor network simulation, testing, and CI/CD pipelines. It offers superior resource efficiency over traditional VMs, allowing for larger, faster topologies. The three primary NOS images used throughout the book are:
 
 | Image | Kind | Pull command |
 |---|---|---|

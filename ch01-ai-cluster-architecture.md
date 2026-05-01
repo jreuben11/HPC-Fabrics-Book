@@ -53,6 +53,8 @@ docker images ghcr.io/nokia/srlinux
 
 ### iperf3
 
+- https://github.com/esnet/iperf 
+
 ```bash
 # Already installed via apt above; verify
 iperf3 --version
@@ -76,7 +78,7 @@ docker info | grep -E "Server Version|Cgroup"
 
 ## 1.1 Why the Network Is the Bottleneck
 
-A modern GPU training cluster is, at its core, a distributed memory system. Each GPU has fast local HBM (High Bandwidth Memory, the on-package DRAM stack on modern accelerators), but no single GPU holds the full model. Training requires frequent synchronization — parameter gradients must be aggregated across every rank after each backward pass. At scale, a 1000-GPU job running AllReduce (a collective operation that sums tensors across all participating GPUs and distributes the result back to each) over a 70B-parameter model moves hundreds of gigabytes of gradient data per step. If the network cannot sustain that bandwidth at low latency, GPUs stall waiting for data. Compute utilization collapses.
+A modern GPU training cluster is, at its core, a distributed memory system. Each GPU has fast local **HBM** (High Bandwidth Memory, the on-package DRAM stack on modern accelerators), but no single GPU holds the full model. Training requires frequent synchronization — parameter gradients must be aggregated across every rank after each backward pass. At scale, a 1000-GPU job running **AllReduce** (a collective operation that sums tensors across all participating GPUs and distributes the result back to each) over a 70B-parameter model moves hundreds of gigabytes of gradient data per step. If the network cannot sustain that bandwidth at low latency, GPUs stall waiting for data. Compute utilization collapses.
 
 The implication: the network is not infrastructure that passively moves bits. It is a first-class component of the training system, and its topology, bandwidth profile, congestion behavior, and latency tail all directly determine model throughput.
 
@@ -86,7 +88,7 @@ The implication: the network is not infrastructure that passively moves bits. It
 
 ### 1.2.1 Fat-Tree (Clos) Networks
 
-The dominant topology in hyperscale AI clusters is the **fat-tree**, a specific realization of a folded Clos network. A k-ary fat-tree has three layers of switches — edge (ToR), aggregation, and core — and supports k³/4 hosts with full bisection bandwidth.
+The dominant topology in hyperscale AI clusters is the **fat-tree**, a specific realization of a **folded** Clos network. A k-ary fat-tree has three layers of switches — edge (**ToR** {Top of Rack}), aggregation, and core — and supports k³/4 hosts with full bisection bandwidth.
 
 ```
                  [Core switches]
@@ -98,18 +100,24 @@ The dominant topology in hyperscale AI clusters is the **fat-tree**, a specific 
        [hosts]   [hosts]   [hosts]
 ```
 
+**Clos network**: a multi-stage, non-blocking network topology originaly designed by Charles Clos in 1952 to optimize telephony switches. It organizes switches into three stages (ingress, middle, egress) to provide any-to-any connectivity using smaller switches, reducing total crosspoints. Modern data centers use this architecture, often as a **two-tier "spine-leaf" (folded) design**, to deliver high-performance, low-latency communication with **equal-cost multipath (ECMP)** routing
+
+**Equal-Cost Multi-Path (ECMP)**: a routing strategy that allows a router to use multiple best paths, having identical metrics, for forwarding packets to a single destination. It load-balances traffic, increasing bandwidth, redundancy, and fault tolerance. Typically, it uses **per-flow hashing** to ensure in-order delivery, compatible with protocols like OSPF and BGP.
+
+**Per-flow hashing**: a network traffic distribution technique that maps specific data flows (defined by source/destination IP, port, and protocol) to the same physical link or path (**LAG/ECMP**). This ensures packet ordering within a flow while balancing, providing efficient utilization across multiple paths. It is used for load balancing and in DPDK applications for fast lookup.
+
 **Full bisection bandwidth** means any permutation of host-to-host communication can run at line rate simultaneously. For AllReduce, this is the ideal — no traffic pattern is privileged. The cost is switch count: a k=48 fat-tree needs 27 spine switches, 27 aggregation switches, and scales to ~1728 servers.
 
-**Key parameter:** k (radix of each switch). Higher radix reduces the number of tiers and hop count but requires higher port-count ASICs (e.g., Tomahawk4 at 512×100G ports). Modern clusters use 400G or 800G links to reduce port count.
+**Key parameter:** k (**radix** of each switch). Higher radix reduces the number of tiers and hop count but requires higher port-count ASICs (e.g., Tomahawk4 at 512×100G ports). Modern clusters use 400G or 800G links to reduce port count.
 
 ### 1.2.2 Rail-Optimized Fabric
 
 For GPU clusters, a variant called the **rail-optimized** (or GPU-rail) fabric has become standard. The insight: a multi-GPU server (e.g., 8× H100) has 8 NICs, one per GPU. Rather than connecting all 8 NICs to the same ToR, each NIC connects to a *different* ToR in a set of 8 "rails."
 
-```
+```bash
 GPU0 ── Rail0-ToR0 ──┐
 GPU1 ── Rail1-ToR0 ──┤
-GPU2 ── Rail2-ToR0 ──┤   All Rail0 ToRs connect to Rail0 Spine
+GPU2 ── Rail2-ToR0 ──┤   #All Rail0 ToRs connect to Rail0 Spine
 GPU3 ── Rail3-ToR0 ──┘
 ...
 ```
@@ -122,6 +130,9 @@ In a ring-AllReduce, each GPU only communicates with GPUs on the same rail (same
 
 At extreme scale (>100,000 GPUs), pure fat-trees become impractical due to cable density and switch count. **Dragonfly** topologies reduce global link count by accepting that some traffic must traverse multiple hops through "groups" of all-to-all connected switches. **Hypercube** topologies (used in some TPU pod networks) offer predictable bisection at the cost of complex routing. Both are beyond typical on-prem deployments but appear in NIC/ASIC vendor roadmaps.
 
+**Dragonfly topology**: a hierarchical, high-radix interconnection network designed to minimize network diameter and cost in large-scale HPC and AI systems by grouping switches in a fully connected mesh. It uses local links for intra-group connections and expensive long-distance global cables to connect all groups, typically achieving low latency in only three hops
+
+**Hypercube Topology**: a network structure used in parallel computing, consisting of \(N=2^n\) nodes arranged in \(n\) dimensions. Each processor connects directly to \(n\) neighbors, with node addresses differing by exactly one bit. It features a low diameter (\(\log _{2}N\)) and high fault tolerance, making it efficient for parallel algorithms and message-passing
 ---
 
 ## 1.3 Traffic Pattern Taxonomy
@@ -130,9 +141,9 @@ Understanding what traffic flows over the fabric at what volume and frequency is
 
 ### 1.3.1 AllReduce (Data Parallelism)
 
-In **Data Parallel** training, each GPU holds a full copy of the model and a shard of the batch. After the backward pass, gradients must be summed across all GPUs. This is AllReduce.
+In **Data Parallel** training, each GPU holds a full copy of the model and a **shard of the batch**. After the **backward pass**, **gradients** must be summed across all GPUs. This is AllReduce.
 
-- **Volume:** 2 × model_size × (N-1)/N bytes per step (ring-AllReduce algorithm)
+- **Volume:** 2 × model_size × (N-1)/N bytes per step (**ring-AllReduce** algorithm)
 - **Pattern:** All-to-all; every rank both sends and receives; traffic is balanced
 - **Frequency:** Once per training step (typically every 100–500 ms for large models)
 - **Latency sensitivity:** Moderate — the GPU waits for AllReduce to complete before the next forward pass begins
@@ -152,7 +163,7 @@ Pipeline traffic is typically within a node (NVLink, NVIDIA's proprietary high-b
 
 ### 1.3.3 Tensor Parallelism
 
-In **Tensor Parallel** training, individual weight matrices are sharded across GPUs. Every forward pass requires AllReduce within the tensor-parallel group.
+In **Tensor Parallel** training, individual **weight matrices are sharded** across GPUs. Every forward pass requires AllReduce within the tensor-parallel group.
 
 - **Volume:** Small (shard of activation) but frequent
 - **Pattern:** All-to-all within a small group (typically 4–8 GPUs, often within a node)
@@ -173,11 +184,11 @@ Both are storage-fabric concerns (Chapter 18) but their bandwidth demands must b
 
 Fat-tree fabrics use **Equal-Cost Multi-Path (ECMP)** routing to spread traffic across parallel paths. ECMP hashes each flow (typically on 5-tuple: src IP, dst IP, proto, src port, dst port) to one of N uplinks.
 
-The problem for AI traffic: NCCL (NVIDIA Collective Communications Library, the dominant GPU collective runtime) collective operations use a small number of long-lived flows between the same pairs of endpoints. With only 8 GPU flows from a server, ECMP hashing easily produces collisions — multiple flows hash to the same uplink, leaving others idle.
+The problem for AI traffic: **NCCL** (NVIDIA Collective Communications Library, the dominant GPU collective runtime) collective operations use a small number of long-lived flows between the same pairs of endpoints. With only 8 GPU flows from a server, ECMP hashing easily produces collisions — multiple flows hash to the same uplink, leaving others idle.
 
 **Mitigations:**
-- **ECMP with flowlet switching**: re-hash after a burst gap, spreading elephant flows across paths dynamically
-- **Per-packet load balancing (DLRS, Dynamic Load-balancing with Resequencing)**: hash each *packet* rather than each *flow*; requires reorder tolerance at the receiver (RoCEv2 is not reorder-tolerant — this only applies to TCP flows)
+- **ECMP with flowlet switching**: re-hash after a burst gap, spreading **elephant flows** across paths dynamically
+- **Per-packet load balancing (DLRS, Dynamic Load-balancing with Resequencing)**: hash each *packet* rather than each *flow*; requires reorder tolerance at the receiver (**RoCEv2 is not reorder-tolerant** — this only applies to TCP flows)
 - **Rail-optimized topology** (Section 1.2.2): eliminate the collision problem by ensuring each GPU's flows land on a dedicated set of uplinks
 - **NCCL topology files**: allow NCCL to express which GPU pairs communicate, enabling deterministic NIC selection
 
@@ -203,29 +214,29 @@ The problem for AI traffic: NCCL (NVIDIA Collective Communications Library, the 
 The remainder of this book addresses each layer of the following stack:
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Distributed Training Runtime (PyTorch/DeepSpeed)│  Ch 20 (brief)
-├─────────────────────────────────────────────────┤
-│  GPU Collective Library (NCCL / RCCL)            │  Ch 19 (brief)
-├─────────────────────────────────────────────────┤
-│  Interconnect Abstraction (UCX / LibFabric)      │  Ch 4
-├─────────────────────────────────────────────────┤
-│  RDMA Transport (rdma-core / RoCEv2 / IB verbs)  │  Ch 2
-├─────────────────────────────────────────────────┤
-│  Kernel-Bypass I/O (DPDK / SPDK / eBPF-XDP)     │  Ch 5, 6, 7
-├─────────────────────────────────────────────────┤
+┌───────────────────────────────────────────────────┐
+│  Distributed Training Runtime (PyTorch/DeepSpeed) │  Ch 20 (brief)
+├───────────────────────────────────────────────────┤
+│  GPU Collective Library (NCCL / RCCL)             │  Ch 19 (brief)
+├───────────────────────────────────────────────────┤
+│  Interconnect Abstraction (UCX / LibFabric)       │  Ch 4
+├───────────────────────────────────────────────────┤
+│  RDMA Transport (rdma-core / RoCEv2 / IB verbs)   │  Ch 2
+├───────────────────────────────────────────────────┤
+│  Kernel-Bypass I/O (DPDK / SPDK / eBPF-XDP)       │  Ch 5, 6, 7
+├───────────────────────────────────────────────────┤
 │  Kubernetes / Container Networking (Cilium/SR-IOV)│  Ch 12, 13
-├─────────────────────────────────────────────────┤
-│  Programmable Fabric (SONiC / SR Linux / P4)     │  Ch 8, 9, 10
-├─────────────────────────────────────────────────┤
-│  Overlay & Routing (BGP-EVPN / VXLAN / FRR)     │  Ch 11
-├─────────────────────────────────────────────────┤
-│  Management & Telemetry (YANG / gNMI / OTel)    │  Ch 14–17
-├─────────────────────────────────────────────────┤
-│  Storage Fabric (Ceph / Lustre / DAOS)           │  Ch 18
-├─────────────────────────────────────────────────┤
-│  Time Synchronization (PTP / linuxptp)           │  Ch 3
-└─────────────────────────────────────────────────┘
+├───────────────────────────────────────────────────┤
+│  Programmable Fabric (SONiC / SR Linux / P4)      │  Ch 8, 9, 10
+├───────────────────────────────────────────────────┤
+│  Overlay & Routing (BGP-EVPN / VXLAN / FRR)       │  Ch 11
+├───────────────────────────────────────────────────┤
+│  Management & Telemetry (YANG / gNMI / OTel)      │  Ch 14–17
+├───────────────────────────────────────────────────┤
+│  Storage Fabric (Ceph / Lustre / DAOS)            │  Ch 18
+├───────────────────────────────────────────────────┤
+│  Time Synchronization (PTP / linuxptp)            │  Ch 3
+└───────────────────────────────────────────────────┘
 ```
 
 ---
@@ -331,7 +342,7 @@ sudo containerlab deploy --topo ecmp-topo.yml
 
 Expected output (truncated):
 
-```
+```bash
 INFO[0000] Containerlab v0.x.y started
 INFO[0000] Parsing & checking topology file: ecmp-topo.yml
 INFO[0001] Creating lab directory: /root/clab-ecmp-lab/clab-ecmp-lab
@@ -371,7 +382,7 @@ Expected: all 8 containers show `Up N seconds` with no `Exited` entries.
 # SSH into leaf1 (Containerlab sets up SSH with default credentials admin/NokiaSrl1!)
 ssh admin@clab-ecmp-lab-leaf1
 
-# Inside SR Linux CLI, show interface summary
+# Inside SR Linux CLI https://learn.srlinux.dev/get-started/cli/ , show interface summary
 show interface brief
 ```
 
@@ -404,7 +415,7 @@ ssh admin@clab-ecmp-lab-leaf1
 
 Inside SR Linux:
 
-```
+```bash
 enter candidate
     /interface ethernet-1/1 subinterface 0 ipv4 address 10.0.1.1/30
     /interface ethernet-1/2 subinterface 0 ipv4 address 10.0.2.1/30
@@ -430,7 +441,7 @@ show network-instance default route-table ipv4-unicast prefix 192.168.3.0/24
 
 Expected output showing two equal-cost next-hops (ECMP across spine1 and spine2):
 
-```
+```bash
 ------------------------------------------------------------------------
 Prefix            : 192.168.3.0/24
 Route type        : static
@@ -472,7 +483,7 @@ docker exec clab-ecmp-lab-host1 ping -c 4 192.168.3.10
 
 Expected:
 
-```
+```bash
 PING 192.168.3.10 (192.168.3.10) 56(84) bytes of data.
 64 bytes from 192.168.3.10: icmp_seq=1 ttl=62 time=0.8 ms
 64 bytes from 192.168.3.10: icmp_seq=2 ttl=62 time=0.6 ms
@@ -500,7 +511,7 @@ docker exec clab-ecmp-lab-host1 iperf3 -c 192.168.3.10 -p 5201 -P 4 -t 10 -i 2
 
 Expected output:
 
-```
+```bash
 [ ID] Interval           Transfer     Bitrate
 [  5]   0.00-2.00   sec   112 MBytes   470 Mbits/sec
 [  5]   2.00-4.00   sec   114 MBytes   478 Mbits/sec
@@ -564,7 +575,7 @@ sudo containerlab destroy --topo ecmp-topo.yml --cleanup
 
 Expected:
 
-```
+```bash
 INFO[0000] Destroying lab: ecmp-lab
 INFO[0001] Removed container: clab-ecmp-lab-host1
 INFO[0001] Removed container: clab-ecmp-lab-host2

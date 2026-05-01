@@ -1,9 +1,9 @@
 # The AI Cluster Network Stack
 ### *Building High-Performance Fabrics for GPU Clusters from First Principles*
 
-The network is the bottleneck. Every large-scale AI training run eventually hits the same wall: GPUs sit idle, not because they lack compute, but because the fabric between them cannot deliver data fast enough. This book is a vertical integration guide for the open-source tools that fix that — from the RDMA transport model at the bottom through kernel-bypass I/O, programmable fabrics, container networking, model-driven management, distributed storage, and the testing frameworks that let you validate the whole stack before touching production hardware.
+The network is the bottleneck. Every large-scale AI training run eventually hits the same wall: GPUs sit idle, not because they lack compute, but because the **fabric** between them cannot deliver data fast enough. This book is a vertical integration guide for the open-source tools that fix that — from the **RDMA transport** model at the bottom through **kernel-bypass I/O**, **programmable fabrics**, container networking, model-driven management, distributed storage, and the testing frameworks that let you validate the whole stack before touching production hardware.
 
-Every layer is treated as software: version-controlled, CI-tested, observable, and replaceable. The organizing principle is **disaggregation**: UCX and LibFabric decouple transport semantics from hardware; DPDK and SPDK eject the kernel from the I/O path; eBPF extends programmability deep into Linux without leaving it; SONiC and SR Linux replace proprietary NOSes with systems that expose the ASIC through open APIs; P4 makes the forwarding pipeline itself a software artifact.
+Every layer is treated as software: version-controlled, CI-tested, observable, and replaceable. The organizing principle is **disaggregation**: **UCX** and **LibFabric** decouple transport semantics from hardware; **DPDK** and **SPDK** eject the kernel from the I/O path; **eBPF** extends programmability deep into Linux without leaving it; **SONiC** and **SR Linux** replace proprietary **NOS**es with systems that expose the ASIC through open APIs; **P4** makes the forwarding pipeline itself a software artifact.
 
 ---
 
