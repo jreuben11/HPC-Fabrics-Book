@@ -10,7 +10,7 @@ Precise clock synchronization is a silent prerequisite of the AI cluster network
 
 This chapter explains why **NTP**'s millisecond accuracy is insufficient for AI cluster workloads, and how **PTP** achieves sub-microsecond synchronization by exploiting hardware timestamping at the **NIC** MAC layer. The core of **PTP** is a hierarchical clock architecture — **Grandmaster**, **Boundary Clock**, **Transparent Clock**, and **Ordinary Clock** — combined with a delay-request exchange that continuously estimates and corrects for asymmetric propagation delay. The **Best Master Clock Algorithm** (**BMCA**) provides automatic leader election, ensuring clusters survive grandmaster failures without manual intervention.
 
-We cover the practical Linux deployment of **PTP** through `linuxptp`, the canonical open-source implementation. The two central components — `ptp4l`, which disciplines the **NIC**'s hardware clock (**PHC**) to the network master, and `phc2sys`, which copies that hardware clock into the system's CLOCK_REALTIME — are explained in detail along with their key configuration parameters and the PI servo behavior that governs convergence speed and stability.
+We cover the practical Linux deployment of **PTP** through `linuxptp`, the canonical open-source implementation. The two central components — `ptp4l`, which disciplines the **NIC**'s hardware clock (**PHC**) to the network master, and `phc2sys`, which copies that hardware clock into the system's `CLOCK_REALTIME` — are explained in detail along with their key configuration parameters and the PI servo behavior that governs convergence speed and stability.
 
 The chapter also addresses the interaction between **PTP** and `chrony` for hybrid **NTP**/**PTP** environments, the **GPS**/**PPS**-based grandmaster setup used in on-premises clusters, and the boundary-clock deployment pattern on top-of-rack switches that is standard in production AI fabrics. Understanding **PTP** is prerequisite for the congestion-control discussion in Chapter 2 (**DCQCN** **ECN** feedback relies on **NIC** hardware timestamps) and for the observability chapter (Chapter 16), where cross-host trace correlation requires synchronized clocks.
 
@@ -92,14 +92,14 @@ PTP organizes clocks into a hierarchy:
 
 ### Clock Types
 
-- **Grandmaster (GM):** The root time source, typically disciplined by a GNSS receiver (Global Navigation Satellite System — GPS, Galileo, GLONASS, or BeiDou) with a PPS (Pulse Per Second) output that provides a precise 1-Hz timing reference, or a cesium oscillator. Announces timing on all PTP ports.
+- **Grandmaster (GM):** The root time source, typically disciplined by a **GNSS** receiver (**Global Navigation Satellite System** — **GPS**, **Galileo**, **GLONASS**, or **BeiDou**) with a **PPS (Pulse Per Second)** output that provides a precise 1-Hz timing reference, or a cesium oscillator. Announces timing on all PTP ports.
 - **Boundary Clock (BC):** A switch or dedicated appliance that terminates PTP upstream (syncs to GM) and re-originates it downstream. Eliminates queuing delay jitter from the path.
 - **Transparent Clock (TC):** A switch that forwards PTP messages unchanged but adds a *residence time* correction field, accounting for the time the message spent queued inside the switch. Simpler than BC but less accurate.
 - **Ordinary Clock (OC):** A leaf (server/NIC) with a single PTP port. Either a master (GM) or slave (time recipient).
 
 ### Best Master Clock Algorithm (BMCA)
 
-PTP clocks announce themselves via Announce messages containing clock quality attributes (grandmaster identity, clock class, accuracy, variance). BMCA selects the best master deterministically:
+PTP clocks announce themselves via `Announce` messages containing clock quality attributes (grandmaster identity, clock class, accuracy, variance). BMCA selects the best master deterministically:
 
 1. Lowest `gmPriority1` wins
 2. Ties broken by `gmClockClass` (lower = more accurate)
@@ -112,7 +112,7 @@ PTP clocks announce themselves via Announce messages containing clock quality at
 
 The fundamental synchronization exchange (two-step mode):
 
-```
+```bash
 Master                          Slave
   |──── Sync (t1) ──────────────►|  t2 = arrival time at slave
   |──── Follow_Up (t1) ─────────►|  carries t1 (software timestamp)
@@ -299,7 +299,7 @@ ethtool -T eth0
 
 Expected output on a NIC with full HW timestamp support (e.g., Intel X710, Mellanox ConnectX-5):
 
-```
+```bash
 Time stamping parameters for eth0:
 Capabilities:
         hardware-transmit     (SOF_TIMESTAMPING_TX_HARDWARE)
@@ -380,7 +380,7 @@ sudo containerlab deploy -t ptp-topo.yml
 
 Expected output:
 
-```
+```bash
 INFO[0000] Containerlab v0.54.2 started
 INFO[0000] Parsing & checking topology file: ptp-topo.yml
 INFO[0001] Creating lab directory: /root/clab-ptp-domain
@@ -425,7 +425,7 @@ ptp4l -i eth1 -m --time_stamping software --priority1 128 \
 
 Expected GM startup output:
 
-```
+```bash
 ptp4l[1.000]: selected /dev/ptp0 or CLOCK_REALTIME as PTP clock
 ptp4l[1.001]: port 1: INITIALIZING to LISTENING on INIT_COMPLETE
 ptp4l[1.002]: port 1: LISTENING to MASTER on ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES
@@ -448,7 +448,7 @@ ptp4l -i eth1 -i eth2 -m --time_stamping software \
 
 Expected BC output (after syncing to GM):
 
-```
+```bash
 ptp4l[1.000]: port 1: INITIALIZING to LISTENING on INIT_COMPLETE
 ptp4l[1.001]: port 2: INITIALIZING to LISTENING on INIT_COMPLETE
 ptp4l[3.210]: port 1: LISTENING to UNCALIBRATED on RS_SLAVE
@@ -476,7 +476,7 @@ ptp4l -i eth1 -m -s --time_stamping software 2>&1 | tee /tmp/oc.log
 
 Expected OC output (converging):
 
-```
+```bash
 ptp4l[1.000]: port 1: INITIALIZING to LISTENING on INIT_COMPLETE
 ptp4l[3.500]: port 1: LISTENING to UNCALIBRATED on RS_SLAVE
 ptp4l[5.600]: port 1: UNCALIBRATED to SLAVE on MASTER_CLOCK_SELECTED
@@ -502,7 +502,7 @@ sudo docker exec clab-ptp-domain-oc bash -c \
 
 Expected output when locked:
 
-```
+```bash
 sending: GET TIME_STATUS_NP
         7884c4.fffe.5a9b01-0 seq 0 RESPONSE MANAGEMENT TIME_STATUS_NP
                 master_offset              4
@@ -529,7 +529,7 @@ sudo docker exec clab-ptp-domain-oc bash -c \
 
 Expected output:
 
-```
+```bash
         stepsRemoved                   2
         offsetFromMaster               4.0
         meanPathDelay                  234.0
@@ -570,13 +570,13 @@ sudo docker exec clab-ptp-domain-bc bash -c \
 
 Expected:
 
-```
+```bash
 qdisc netem 8001: root refcnt 2 limit 1000 delay 10ms
 ```
 
 Now watch the BC ptp4l log. Within 1–2 seconds you will see the path delay estimate jump:
 
-```
+```bash
 ptp4l[45.200]: master offset         3 s2 freq    -255 path delay       119
 ptp4l[46.200]: master offset     10087 s2 freq    -255 path delay     10118   ← delay jumps
 ptp4l[47.200]: master offset      4231 s2 freq   -4200 path delay     10122   ← servo responding
@@ -617,7 +617,7 @@ sudo docker stop clab-ptp-domain-gm
 
 Watch the OC ptp4l log in real time (from the OC terminal):
 
-```
+```bash
 ptp4l[120.700]: master offset        2 s2 freq    +333 path delay       234
 ptp4l[121.700]: master offset        1 s2 freq    +334 path delay       234
 # ... GM stopped sending Announce messages at t=122 ...
@@ -636,7 +636,7 @@ sudo docker exec clab-ptp-domain-oc bash -c \
 
 Expected output showing loss of GM lock:
 
-```
+```bash
 sending: GET TIME_STATUS_NP
         7884c4.fffe.5a9b01-0 seq 0 RESPONSE MANAGEMENT TIME_STATUS_NP
                 master_offset              0
@@ -651,7 +651,7 @@ sending: GET TIME_STATUS_NP
 
 Critical change: `gmPresent false` and `gmIdentity 000000.0000.000000` (null identity). This is the signal a monitoring system would alert on. In production, this would trigger a page:
 
-```
+```bash
 ALERT: PTP grandmaster lost on host oc-01
        gmPresent=false for >5 seconds
        Action: check GM hardware, verify BMCA elected secondary GM
@@ -666,7 +666,7 @@ sudo docker exec clab-ptp-domain-bc bash -c \
 
 Expected:
 
-```
+```bash
         portState              LISTENING   ← was SLAVE, now hunting for master
         ...
 ```
@@ -684,7 +684,7 @@ sudo docker exec clab-ptp-domain-gm bash -c \
 
 Within `announceReceiptTimeout` seconds (3 s), BC and OC will re-elect the GM:
 
-```
+```bash
 ptp4l[145.300]: port 1: MASTER to LISTENING on ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES
 ptp4l[145.301]: selected best master clock: aabbcc.fffe.ddeeff
 ptp4l[145.302]: port 1: LISTENING to UNCALIBRATED on RS_SLAVE
@@ -704,7 +704,7 @@ sudo containerlab destroy -t ~/ptp-lab/ptp-topo.yml --cleanup
 
 Expected:
 
-```
+```bash
 INFO[0000] Destroying lab: ptp-domain
 INFO[0001] Removed container: clab-ptp-domain-gm
 INFO[0001] Removed container: clab-ptp-domain-bc

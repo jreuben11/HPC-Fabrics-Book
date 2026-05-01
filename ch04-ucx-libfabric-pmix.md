@@ -94,17 +94,17 @@ UCX and LibFabric solve this by providing a **unified, transport-agnostic messag
 
 UCX has a layered architecture:
 
-```
+```bash
 Application (NCCL, OpenMPI, UCC)
         │
-    UCT API   ← transport-agnostic tagged/RMA messaging
+    UCT API   # ← transport-agnostic tagged/RMA messaging
         │
  ┌──────┴──────────────────────────────┐
  │  UCT transports (components)        │
- │  rc_mlx5  ud_mlx5  dc_mlx5         │  ← InfiniBand / RoCE
- │  tcp      sockcm                   │  ← TCP fallback
- │  shmem    cma   knem               │  ← shared memory
- │  cuda_copy  cuda_ipc               │  ← GPU-to-GPU
+ │  rc_mlx5  ud_mlx5  dc_mlx5          │  # ← InfiniBand / RoCE
+ │  tcp      sockcm                    │  # ← TCP fallback
+ │  shmem    cma   knem                │  # ← shared memory
+ │  cuda_copy  cuda_ipc                │  # ← GPU-to-GPU
  └─────────────────────────────────────┘
 ```
 
@@ -157,20 +157,20 @@ Run `ucx_info -d` to enumerate all detected transports and their capabilities on
 
 UCC is the collective-operation companion to UCX, providing AllReduce, AllGather, Broadcast, Barrier, and more with pluggable backends:
 
-```
+```bash
 UCC API
    │
  ┌─┴──────────────────────────────┐
  │  UCC components (CLs)          │
- │  cl_basic   ← basic CPU impl  │
- │  cl_hier    ← hierarchical    │
- │  tl_ucp     ← UCX transport   │
- │  tl_sharp   ← in-network SHARP│
- │  tl_nccl    ← NCCL backend    │
+ │  cl_basic   #← basic CPU impl  │
+ │  cl_hier    #← hierarchical    │
+ │  tl_ucp     #← UCX transport   │
+ │  tl_sharp   #← in-network SHARP│
+ │  tl_nccl    #← NCCL backend    │
  └────────────────────────────────┘
 ```
 
-SHARP (Scalable Hierarchical Aggregation and Reduction Protocol) is an NVIDIA Spectrum switch feature that offloads AllReduce computation to switch ASICs — the `tl_sharp` component completes AllReduce in the network without involving host CPUs at all.
+**SHARP (Scalable Hierarchical Aggregation and Reduction Protocol)** is an NVIDIA Spectrum switch feature that offloads AllReduce computation to switch ASICs — the `tl_sharp` component completes AllReduce in the network without involving host CPUs at all.
 
 ---
 
@@ -262,10 +262,10 @@ When a 1000-rank MPI job starts, every rank needs to know the network address of
 
 ### 4.4.2 PMIx Architecture
 
-```
-Job scheduler (SLURM / PBS)              ← workload managers that launch MPI/AI jobs
+```bash
+Job scheduler (SLURM / PBS)              # ← workload managers that launch MPI/AI jobs
         │  spawns
-    PMIx server (per-node daemon, e.g., prte, prrte)  ← PRRTE = PMIx Reference RunTime Environment
+    PMIx server (per-node daemon, e.g., prte, prrte)  # ← PRRTE = PMIx Reference RunTime Environment
         │  PMIx wire protocol
 Application process (MPI rank / NCCL rank)
         │  calls
@@ -313,7 +313,7 @@ This is the foundation for fault-tolerant collective operations — a long-sough
 
 ## 4.5 CXL — Coherent Memory Fabric
 
-CXL (Compute Express Link) is a PCIe-based protocol for attaching memory and accelerators to CPUs with cache-coherent access. It operates at three protocol layers:
+C**XL (Compute Express Link)** is a PCIe-based protocol for attaching memory and accelerators to CPUs with cache-coherent access. It operates at three protocol layers:
 
 | Protocol | Purpose |
 |---|---|
@@ -350,7 +350,7 @@ ucx_info -d
 
 Full expected output (on a host with no IB NIC, loopback + TCP + shared memory only):
 
-```
+```bash
 #===========================================================================
 # UCX version=1.14.1 revision 0
 #===========================================================================
@@ -389,7 +389,7 @@ Full expected output (on a host with no IB NIC, loopback + TCP + shared memory o
 
 On a host with a Mellanox/NVIDIA InfiniBand or RoCE NIC you will additionally see:
 
-```
+```bash
 # Transport: rc_mlx5
 #   Device: mlx5_0 port 1
 #   capabilities: AM TAG RMA AMO32 AMO64 FLUSH
@@ -609,7 +609,7 @@ fi_info --list
 
 Expected output on Ubuntu 24.04 with standard packages (no specialized NICs):
 
-```
+```bash
 provider: psm3
     version: 1.16.0
     type: FI_EP_RDM
@@ -658,7 +658,7 @@ fi_info -p shm
 
 Expected (shared memory provider):
 
-```
+```bash
 provider: shm
     fabric: shm
     domain: shm

@@ -6,11 +6,11 @@
 
 ## Introduction
 
-The **Linux** kernel network stack is a marvel of software engineering — correct, secure, and general-purpose. It is also fundamentally unsuited to the demands of 400 Gbps line-rate packet processing. Each packet received through the kernel path requires a hardware interrupt, a `sk_buff` allocation, protocol demultiplexing, socket buffer copies, and a system call return. At 400 Gbps with 64-byte minimum frames, there are roughly 595 million packets per second, leaving less than 2 nanoseconds of CPU budget per packet — a single cache miss exceeds that budget. **DPDK** (Data Plane Development Kit) exists to solve this problem by eliminating the kernel from the data path entirely.
+The **Linux** kernel network stack is a marvel of software engineering — correct, secure, and general-purpose. It is also fundamentally unsuited to the demands of 400 Gbps line-rate packet processing. Each packet received through the kernel path requires a hardware interrupt, a `sk_buff` allocation, protocol demultiplexing, socket buffer copies, and a system call return. At 400 Gbps with 64-byte minimum frames, there are roughly 595 million packets per second, leaving less than 2 nanoseconds of CPU budget per packet — a single cache miss exceeds that budget. **DPDK** (**Data Plane Development Kit**) exists to solve this problem by eliminating the kernel from the data path entirely.
 
-**DPDK** is an open-source framework, primarily maintained under the **Linux Foundation**, that provides user-space poll-mode drivers (**PMD**s) for a broad range of **NIC**s. Rather than waiting for interrupt-driven notifications, a **DPDK** application dedicates one or more CPU cores to busy-polling **NIC** receive rings directly from user space. Packets arrive into **DPDK**'s `rte_mbuf` structures from **DMA** memory that the **NIC** and the CPU share via hugepages, with zero kernel involvement, zero copies, and zero system calls on the data path.
+**DPDK** is an open-source framework, primarily maintained under the **Linux Foundation**, that provides user-space **poll-mode drivers** (**PMD**s) for a broad range of **NIC**s. Rather than waiting for interrupt-driven notifications, a **DPDK** application dedicates one or more CPU cores to busy-polling **NIC** receive rings directly from user space. Packets arrive into **DPDK**'s `rte_mbuf` structures from **DMA** memory that the **NIC** and the CPU share via hugepages, with zero kernel involvement, zero copies, and zero system calls on the data path.
 
-This chapter builds the **DPDK** programming model from the environment abstraction layer (**EAL**) through hugepage configuration, **NUMA**-aware memory allocation, multi-queue **RSS**, hardware flow steering, and checksum offloads. The architecture is layered: **EAL** handles platform initialization and device binding; **PMD**s implement the **NIC**-specific **DMA** ring protocol; `rte_mempool` and `rte_mbuf` provide the packet buffer management layer; and application libraries (`rte_hash`, `rte_lpm`, `rte_acl`) implement forwarding-plane data structures.
+This chapter builds the **DPDK** programming model from the **environment abstraction layer** (**EAL**) through hugepage configuration, **NUMA**-aware memory allocation, multi-queue **RSS**, hardware flow steering, and checksum offloads. The architecture is layered: **EAL** handles platform initialization and device binding; **PMD**s implement the **NIC**-specific **DMA** ring protocol; `rte_mempool` and `rte_mbuf` provide the packet buffer management layer; and application libraries (`rte_hash`, `rte_lpm`, `rte_acl`) implement forwarding-plane data structures.
 
 **DPDK**'s primary role in AI cluster networking is in the **DPU**/**SmartNIC** programmable offload pipeline (Chapter 10) and in **OVS-DPDK**, the kernel-bypass virtual switch used to forward tenant traffic on multi-tenant AI cloud infrastructure. Understanding **DPDK**'s poll-model, memory architecture, and flow-steering primitives is prerequisite for Chapter 10 and provides the conceptual foundation for contrasting with **eBPF**/**XDP** (Chapter 7), which achieves kernel-bypass-level performance for some workloads while retaining kernel integration.
 
@@ -99,7 +99,7 @@ cmake --build build -j$(nproc)
 
 The Linux kernel network stack was designed for correctness and generality, not for sustained line-rate I/O. At 400 Gbps, a host receives 595 million packets per second (at 84-byte minimum frames). The kernel path for each packet involves:
 
-1. Hardware interrupt → interrupt handler → NAPI poll (New API, the Linux kernel's interrupt-mitigation framework that coalesces packet delivery into polling bursts)
+1. Hardware interrupt → interrupt handler → **NAPI** poll (**New API**, the Linux kernel's interrupt-mitigation framework that coalesces packet delivery into polling bursts)
 2. `sk_buff` (socket buffer) allocation from slab — the kernel's per-packet metadata structure, roughly 200 bytes of overhead per packet
 3. Protocol processing (Ethernet → IP → TCP/UDP)
 4. Socket buffer copy into user space
@@ -108,6 +108,8 @@ The Linux kernel network stack was designed for correctness and generality, not 
 Each of these steps has a cost measured in nanoseconds. Aggregated across 595 Mpps, the CPU budget per packet is 1.7 ns — less than a single cache miss. The kernel stack consumes 3–8 CPU cores just to sustain this rate, cores that would otherwise serve GPU workloads.
 
 **DPDK's answer:** poll the NIC from user space, batch packet processing, and never involve the kernel on the data path.
+
+Note: While **io_uring** is a modern, high-performance Linux asynchronous I/O interface, it still fundamentally interacts with the kernel. For absolute maximum packet processing performance (e.g., 100GbE+ line rate), direct NIC polling (PMD) is superior. For storage or more general, high-throughput asynchronous I/O, io_uring is a better fit.
 
 ---
 
@@ -173,7 +175,7 @@ echo 4 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
 
 ### 5.2.3 CPU Affinity and NUMA
 
-DPDK pins each lcore (logical core) to a specific CPU core via `pthread_setaffinity_np`. For NUMA (Non-Uniform Memory Access) systems — servers with multiple CPU sockets, each with its own local DRAM — memory is allocated from the socket local to the running lcore, avoiding expensive cross-socket memory transactions:
+DPDK pins each **lcore** (logical core) to a specific CPU core via `pthread_setaffinity_np`. For **NUMA** (Non-Uniform Memory Access) systems — servers with multiple CPU sockets, each with its own local DRAM — memory is allocated from the socket local to the running lcore, avoiding expensive cross-socket memory transactions:
 
 ```c
 // Allocate mempool on NUMA socket of port 0
@@ -218,7 +220,7 @@ while (1) {
 
 ### Device Binding
 
-DPDK requires unbinding a NIC from its kernel driver and binding it to `vfio-pci` (preferred — Virtual Function I/O, a kernel framework for safe user-space DMA using IOMMU isolation) or `uio_pci_generic` (a simpler but less secure UIO driver without IOMMU protection):
+DPDK requires unbinding a NIC from its kernel driver and binding it to `vfio-pci` (preferred — **Virtual Function I/O**, a kernel framework for safe user-space DMA using IOMMU isolation) or `uio_pci_generic` (a simpler but less secure UIO driver without IOMMU protection):
 
 ```bash
 # Find PCI address
@@ -269,7 +271,7 @@ Mempool sizing: too small → exhaustion under burst; too large → cache pressu
 
 ## 5.5 Multi-Queue, RSS, and Flow Director
 
-Modern NICs expose multiple hardware Rx/Tx queues. RSS (Receive Side Scaling) distributes incoming packets across queues by hashing packet headers, allowing multiple CPU cores to process traffic in parallel without contention. DPDK exposes these directly:
+Modern NICs expose multiple hardware **Rx/Tx** queues. **RSS (Receive Side Scaling)** distributes incoming packets across queues by hashing packet headers, allowing multiple CPU cores to process traffic in parallel without contention. DPDK exposes these directly:
 
 ```c
 struct rte_eth_conf port_conf = {
@@ -311,7 +313,7 @@ struct rte_flow *flow = rte_flow_create(port, &attr, pattern, actions, &error);
 
 ## 5.6 OVS-DPDK
 
-Open vSwitch with a DPDK data plane replaces the kernel-based OVS fast path with a DPDK poll-mode loop, enabling software vSwitch throughput of 100+ Gbps per core.
+**Open vSwitch** with a DPDK data plane replaces the kernel-based OVS fast path with a DPDK poll-mode loop, enabling software vSwitch throughput of 100+ Gbps per core.
 
 ```bash
 # Initialize OVS with DPDK
@@ -359,6 +361,8 @@ mbuf->tso_segsz = 1460;
 ## Lab Walkthrough 5 — DPDK l2fwd Benchmarking
 
 This walkthrough takes you from a bare Ubuntu 24.04 machine through a full software-loopback benchmark using the `net_tap` virtual device, so no spare NIC is required. Each step includes the exact command, expected output, and a verification check.
+
+Note: A **TAP (Network Tap)** interface is a Linux kernel virtual network device that simulates an Ethernet device at Layer 2 (Data Link Layer). It acts as a bridge between user-space applications and the kernel network stack, allowing software (like VPNs, bridges, or VMs) to inject or receive raw Ethernet frames directly.
 
 ---
 
@@ -668,8 +672,8 @@ grep HugePages_Total /proc/meminfo
 
 - DPDK bypasses the kernel entirely by polling NIC rings from user space, enabling near-line-rate packet processing on commodity hardware.
 - Hugepages and NUMA-aware memory allocation are mandatory for performance; CPU pinning eliminates scheduling jitter.
-- The PMD + mbuf + mempool trio is the fundamental building block; everything else (multi-queue, Flow Director, offloads) builds on top.
-- OVS-DPDK is the standard kernel-bypass vSwitch used in DPU deployments.
+- The **PMD + mbuf + mempool** trio is the fundamental building block; everything else (multi-queue, Flow Director, offloads) builds on top.
+- **OVS-DPDK** is the standard kernel-bypass vSwitch used in DPU deployments.
 
 ---
 

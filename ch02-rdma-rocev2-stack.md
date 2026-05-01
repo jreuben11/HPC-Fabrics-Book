@@ -8,7 +8,7 @@
 
 **Remote Direct Memory Access** (**RDMA**) is the single most impactful networking technology in the modern AI compute stack. By allowing a **NIC** to transfer data directly into or out of remote application memory — bypassing the CPU, the kernel, and the socket layer entirely — **RDMA** makes it possible to sustain 400 Gbps gradient exchange between **GPU**s at latencies measured in single-digit microseconds. Without **RDMA**, training large language models at scale would require orders of magnitude more CPU resources and would be bounded by software overhead rather than physics.
 
-This chapter builds the **RDMA** programming model from first principles, starting with the **verbs** API that underpins every **RDMA** transport — **InfiniBand**, **RoCEv1**, and the now-dominant **RoCEv2**. The **verbs** abstraction (Protection Domains, Memory Regions, Queue Pairs, Completion Queues, and Work Requests) is the universal language of **RDMA** programming; understanding it is prerequisite to working with any **RDMA**-capable library, from `libibverbs` directly to **UCX** (Chapter 4) to **NCCL** (Chapter 19).
+This chapter builds the **RDMA** programming model from first principles, starting with the **verbs** API that underpins every **RDMA** transport — **InfiniBand**, **RoCEv1**, and the now-dominant **RoCEv2**. The **verbs** abstraction (Protection Domains, Memory Regions, Queue Pairs, Completion Queues, and Work Requests) is the universal language of **RDMA** programming; understanding it is prerequisite to working with any **RDMA**-capable library, from `libibverbs` https://github.com/linux-rdma/rdma-core/blob/master/Documentation/libibverbs.md directly to **UCX** (Chapter 4) to **NCCL** (Chapter 19).
 
 We examine the protocol landscape in depth: why **InfiniBand** dominated early **HPC** clusters, why **RoCEv1** failed to achieve broad adoption, and why **RoCEv2** — **RDMA** semantics over standard **UDP**/**IP**/**Ethernet** — won the AI cluster market. The critical trade-off is that **Ethernet**'s lossy nature requires active congestion management: **DCQCN** (Data Center Quantized Congestion Notification), the **ECN**-based rate-control algorithm, is what prevents packet drops from triggering catastrophic **RDMA** retransmission cascades across an entire training job.
 
@@ -148,9 +148,9 @@ RDMA programming uses the **verbs API**, standardized originally by the InfiniBa
 |---|---|
 | **Protection Domain (PD)** | Namespace for access control; memory and QPs are associated with a PD |
 | **Memory Region (MR)** | A pinned, registered region of virtual memory the NIC can DMA to/from; carries an `lkey` (local) and `rkey` (remote) |
-| **Queue Pair (QP)** | A pair of queues — Send Queue (SQ) and Receive Queue (RQ) — defining a logical connection |
+| **Queue Pair (QP)** | A pair of queues — Send Queue (**SQ**) and Receive Queue (**RQ**) — defining a logical connection |
 | **Completion Queue (CQ)** | Where the NIC posts completion events (successes/errors) after processing Work Requests |
-| **Work Request (WR)** | A descriptor posted to a SQ or RQ describing an operation (SEND, RECV, RDMA_WRITE, RDMA_READ) |
+| **Work Request (WR)** | A descriptor posted to a **SQ** or **RQ** describing an operation (`SEND`, `RECV`, `RDMA_WRITE`, `RDMA_READ`) |
 | **Scatter-Gather Entry (SGE)** | A (addr, length, lkey) tuple; a WR can have multiple SGEs for vectorized I/O |
 
 ### 2.2.2 Connection Types
@@ -161,12 +161,12 @@ RDMA programming uses the **verbs API**, standardized originally by the InfiniBa
 
 ### 2.2.3 Operation Types
 
-```
-RDMA_WRITE:   local → remote memory, no CPU involvement on receiver
-RDMA_READ:    pull from remote memory into local buffer
-SEND/RECV:    two-sided; receiver must have posted a RECV WR first
-ATOMIC:       compare-and-swap, fetch-and-add on 64-bit remote words
-```
+
+- `RDMA_WRITE`:   local → remote memory, no CPU involvement on receiver
+- `RDMA_READ`:    pull from remote memory into local buffer
+- `SEND`/`RECV`:    two-sided; receiver must have posted a RECV WR first
+- `ATOMIC`:       compare-and-swap, fetch-and-add on 64-bit remote words
+
 
 ---
 
@@ -175,6 +175,8 @@ ATOMIC:       compare-and-swap, fetch-and-add on 64-bit remote words
 A minimal RDMA WRITE sender:
 
 ```c
+#include <infiniband/verbs.h>
+
 // 1. Open device
 struct ibv_context *ctx = ibv_open_device(dev_list[0]);
 
@@ -224,9 +226,9 @@ assert(wc.status == IBV_WC_SUCCESS);
 
 | Property | InfiniBand | RoCEv1 | RoCEv2 |
 |---|---|---|---|
-| Transport | IB transport | IB transport over Ethernet L2 | IB transport over UDP/IP |
+| Transport | IB transport | IB transport over Ethernet **L2** | IB transport over **UDP/IP** |
 | Routing | Subnet Manager assigns LIDs | L2 only (no IP routing) | Routable over IP fabric |
-| Congestion control | IB credit-based FC | — | DCQCN (ECN-based) |
+| Congestion control | IB credit-based FC | — | **DCQCN** (ECN-based) |
 | Infrastructure | Dedicated IB switches | Standard Ethernet | Standard Ethernet |
 | Adoption | HPC, some AI clusters | Legacy | Dominant in new AI clusters |
 
@@ -236,12 +238,12 @@ RoCEv2 won because it runs over commodity Ethernet switches (avoiding IB switch 
 
 ## 2.5 DCQCN: Congestion Control for RoCEv2
 
-RoCEv2 over Ethernet is intrinsically lossy. Dropped packets break RDMA reliability and trigger expensive retransmissions. **DCQCN** (Data Center Quantized Congestion Notification) prevents loss by coordinating three components:
+RoCEv2 over Ethernet is intrinsically lossy. Dropped packets break RDMA reliability and trigger expensive retransmissions. **DCQCN** (**Data Center Quantized Congestion Notification**) prevents loss by coordinating three components:
 
 ### Switch: ECN Marking
-Switches are configured with RED-based ECN: when a queue depth exceeds a threshold, packets are probabilistically marked with the CE (Congestion Experienced) bit in the IP header. No drops yet — just a signal.
+Switches are configured with **RED-based ECN**: when a queue depth exceeds a threshold, packets are probabilistically marked with the **CE (Congestion Experienced)** bit in the IP header. No drops yet — just a signal.
 
-```
+```json
 # SONiC ECN configuration via CONFIG_DB
 {
   "WRED_PROFILE": {
@@ -260,8 +262,8 @@ When the receiver NIC sees a CE-marked packet, it generates a **Congestion Notif
 
 ### Sender NIC: Rate Control
 On receiving a CNP, the sender NIC applies DCQCN's rate-control algorithm:
-1. **Rate reduction**: multiply current rate by (1 - α/2), where α tracks congestion severity
-2. **Rate recovery**: increase rate additively (AI) until the bandwidth-delay product is reached, then switch to hyperincrement (HA) for fast recovery
+1. **Rate reduction**: multiply current rate by (`1 - α/2`), where α tracks congestion severity
+2. **Rate recovery**: increase **rate additively (AI)** until the bandwidth-delay product is reached, then switch to **hyperincrement (HA)** for fast recovery
 3. **Timer-based actions**: if no CNP arrives for a period, the NIC assumes congestion cleared and begins recovery
 
 **Key tuning parameters** (set on the NIC via `mlnx_qos` — Mellanox's QoS configuration tool for ConnectX NICs — or DOCA, NVIDIA's data-center infrastructure SDK for BlueField DPUs):
@@ -275,7 +277,7 @@ On receiving a CNP, the sender NIC applies DCQCN's rate-control algorithm:
 
 `rdma-core` is the Linux upstream repository for all RDMA userspace components:
 
-```
+```bash
 rdma-core/
 ├── libibverbs/      # Core verbs API and provider loading
 ├── librdmacm/       # Connection management (RDMA CM)
@@ -389,7 +391,7 @@ modinfo rdma_rxe | head -5
 
 Expected output:
 
-```
+```bash
 filename:       /lib/modules/6.8.0-xx-generic/kernel/drivers/infiniband/sw/rxe/rdma_rxe.ko
 description:    Soft RDMA transport
 author:         ...
@@ -405,7 +407,7 @@ sudo modprobe rdma_rxe
 
 ### Step 2: Create a veth pair to simulate two endpoints on one host
 
-A virtual Ethernet pair (`veth0` / `veth1`) acts as a back-to-back cable between two namespaces:
+A **virtual Ethernet** pair (`veth0` / `veth1`) acts as a back-to-back cable between two namespaces:
 
 ```bash
 # Create veth pair
@@ -426,7 +428,7 @@ ip addr show veth1
 
 Expected output for `ip addr show veth0`:
 
-```
+```bash
 5: veth0@veth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
     link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff
     inet 10.10.0.1/30 scope global veth0
@@ -458,7 +460,7 @@ rdma link show
 
 Expected output:
 
-```
+```bash
 link rxe0/1 state ACTIVE physical_state POLLING netdev veth0
 link rxe1/1 state ACTIVE physical_state POLLING netdev veth1
 ```
@@ -478,7 +480,7 @@ ibv_devinfo
 
 Expected output (two devices):
 
-```
+```bash
 hca_id: rxe0
         transport:                      InfiniBand (0)
         fw_ver:                         0.0.0
@@ -513,7 +515,7 @@ rdma dev show
 
 Expected:
 
-```
+```bash
 0: rxe0: node-type ca fw 0.0.0 node-guid aabb:ccff:fedd:eeff sys-image-guid aabb:ccff:fedd:eeff
 1: rxe1: node-type ca fw 0.0.0 node-guid ...
 ```
@@ -546,7 +548,7 @@ The `-x 3` flag selects GID index 3 (IPv4 RoCEv2). A GID (Global Identifier) is 
 
 Expected combined output after the test completes:
 
-```
+```bash
 ---------------------------------------------------------------------------------------
                     RDMA_Write BW Test
  Dual-port       : OFF          Device         : rxe1
@@ -601,7 +603,7 @@ done
 
 Expected output:
 
-```
+```bash
 msg_size=64B:        64       5000           0.21               0.19             0.372
 msg_size=512B:      512       5000           1.43               1.41             0.344
 msg_size=4096B:    4096       5000           4.87               4.82             0.147
@@ -707,7 +709,7 @@ rdma stat show rxe0/1
 
 Expected (counters rising during the benchmark):
 
-```
+```bash
 port_xmit_data: 8372940800
 port_rcv_data:  8372940800
 port_xmit_packets: 127808
@@ -726,7 +728,7 @@ cat /sys/class/infiniband/rxe0/ports/1/counters/port_xmit_discards
 
 ### Step 11: Simulate ECN-like delay with netem and observe latency impact
 
-`netem` (Network Emulator) is a Linux traffic-control (`tc`) discipline that injects configurable delay, jitter, loss, and reordering into a network interface, enabling reproducible testing of protocol behavior under impaired conditions. Add artificial delay to simulate a congested fabric path:
+`netem` (Network Emulator) is a Linux **traffic-control** (`tc`) discipline that injects configurable delay, jitter, loss, and reordering into a network interface, enabling reproducible testing of protocol behavior under impaired conditions. Add artificial delay to simulate a congested fabric path:
 
 ```bash
 # Add 1 ms delay on veth1 (simulating switch queuing)

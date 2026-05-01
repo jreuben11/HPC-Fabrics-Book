@@ -6,7 +6,7 @@
 
 ## Introduction
 
-The **Linux** kernel processes every packet traversing a host's network stack through a series of abstractions — socket buffers, netfilter hooks, the routing table — that were designed for generality, not for the line-rate demands of AI cluster networking. **eBPF** (**extended Berkeley Packet Filter**) and **XDP** (**eXpress Data Path**) break this constraint by embedding a safe, **JIT**-compiled virtual machine directly inside the kernel, allowing custom programs to intercept, inspect, modify, or drop packets at the earliest possible moment: inside the NIC driver itself.
+The **Linux** kernel processes every packet traversing a host's network stack through a series of abstractions — socket buffers, **netfilter** hooks, the routing table — that were designed for generality, not for the line-rate demands of AI cluster networking. **eBPF** (**extended Berkeley Packet Filter**) and **XDP** (**eXpress Data Path**) break this constraint by embedding a safe, **JIT**-compiled virtual machine directly inside the kernel, allowing custom programs to intercept, inspect, modify, or drop packets at the earliest possible moment: inside the NIC driver itself.
 
 For AI cluster operators, **eBPF** provides capabilities that were previously accessible only through kernel modules or dedicated **DPDK** processes: wire-rate packet filtering, zero-copy delivery to user space via **AF_XDP**, and low-overhead tracing of any kernel or user-space function without modifying source code. These properties are directly useful for monitoring **NCCL** collective communication flows, debugging **RDMA** latency anomalies, enforcing network policy in **Kubernetes** (via **Cilium**, covered in Chapter 12), and protecting management interfaces from external traffic at driver speed.
 
@@ -155,7 +155,9 @@ Maps are the primary data structure for eBPF — used for state storage, communi
 
 ## 7.4 libbpf and CO-RE
 
-`libbpf` is the canonical library for loading BPF programs from user space. **CO-RE** (Compile Once, Run Everywhere) enables BPF programs to adapt to kernel struct layout differences at load time, eliminating the need to recompile for each kernel version.
+`libbpf` is the canonical library for loading BPF programs from user space. **CO-RE** (**Compile Once, Run Everywhere**) enables BPF programs to adapt to kernel struct layout differences at load time, eliminating the need to recompile for each kernel version.
+
+Note: **BPF helper macros** https://man7.org/linux/man-pages/man7/bpf-helpers.7.html , primarily found in `bpf_helpers.h` via libbpf, enable eBPF programs to interact with the Linux kernel. They define program sections (`SEC`), facilitate map creation, handle data types, and manage debugging (`bpf_trace_printk`). Key macros include `bpf_map_lookup_elem`, `bpf_map_update_elem`, and `likely`/`unlikely`. The `__uint` and `__type` macros are part of the libbpf library and are used to define BTF-defined maps in eBPF. They allow you to declare map properties in a way that the BPF loader and kernel can understand via **BPF Type Format (BTF)**.
 
 ### Minimal XDP Program with libbpf
 
@@ -285,7 +287,7 @@ User-space UMEM (huge-page backed shared ring)
 Application (reads packets directly from ring)
 ```
 
-UMEM is a contiguous region of user-space memory, typically backed by huge pages, that is registered with the kernel and shared between the NIC's DMA engine and the application. The NIC writes received packets directly into UMEM buffers; the application reads them without any kernel-to-user copy. An XSK (XDP Socket) is the AF_XDP socket type that connects the XDP program running in kernel space to this user-space UMEM region.
+**UMEM** is a contiguous region of user-space memory, typically backed by huge pages, that is registered with the kernel and shared between the NIC's DMA engine and the application. The NIC writes received packets directly into UMEM buffers; the application reads them without any kernel-to-user copy. An **XSK (XDP Socket)** is the AF_XDP socket type that connects the XDP program running in kernel space to this user-space UMEM region.
 
 ```c
 // User space: create XSK socket
@@ -315,7 +317,7 @@ AF_XDP is used by Cilium for its XDP-accelerated load balancer path and by DPDK 
 
 ## 7.7 TC Hook — Traffic Control eBPF
 
-The TC (Traffic Control) hook runs after `sk_buff` allocation, providing access to the full packet including metadata not available at XDP. TC programs are attached to ingress and egress qdiscs. A qdisc (queuing discipline) is the kernel abstraction that controls how packets are queued and scheduled on a network interface; `clsact` is a special pseudo-qdisc that provides ingress and egress classifier attachment points for eBPF programs without introducing actual queuing:
+The TC (Traffic Control) hook runs after `sk_buff` allocation, providing access to the full packet including metadata not available at XDP. TC programs are attached to ingress and egress qdiscs. A **qdisc (queuing discipline)** is the kernel abstraction that controls how packets are queued and scheduled on a network interface; `clsact` is a special pseudo-qdisc that provides ingress and egress classifier attachment points for eBPF programs without introducing actual queuing:
 
 ```bash
 # Attach TC eBPF program to ingress
@@ -331,11 +333,13 @@ TC programs can return:
 - `TC_ACT_SHOT` — drop
 - `TC_ACT_REDIRECT` — redirect to another interface
 
-Cilium uses TC egress programs for SNAT and Kubernetes Service load balancing.
+Cilium uses TC egress programs for **SNAT** and Kubernetes Service load balancing.
 
 ---
 
 ## 7.8 bpftool — Inspecting BPF State
+
+bpftool is the primary command-line utility for inspecting, managing, and debugging eBPF programs and maps within the Linux kernel. It allows users to list loaded programs, pin objects to the BPF virtual filesystem, dump BTF metadata, and generate skels. It is developed alongside the Linux kernel, acting as a key tool for BPF observability.
 
 ```bash
 # List all loaded BPF programs
@@ -368,7 +372,7 @@ Katran is Meta's production L4 load balancer, built on XDP and used at massive s
 
 - **Sub-microsecond packet forwarding** at line rate on commodity Mellanox NICs
 - **Consistent hashing** for connection affinity, implemented entirely in BPF maps
-- **IPIP encapsulation** (IP-in-IP: wrapping the original packet in an outer IP header addressed to the real server, a common load-balancer forwarding technique that avoids the need to modify the original destination IP) to forward packets to real servers — implemented in XDP with direct packet rewrite
+- **IPIP encapsulation** (**IP-in-IP**: wrapping the original packet in an outer IP header addressed to the real server, a common load-balancer forwarding technique that avoids the need to modify the original destination IP) to forward packets to real servers — implemented in XDP with direct packet rewrite
 - **No separate hardware load balancer** — runs on standard servers
 
 Key design: the XDP program does a hash lookup of the destination VIP in a BPF map, selects a real server, rewrites the outer IP header, and redirects via `XDP_TX`. No kernel TCP/IP involvement.
