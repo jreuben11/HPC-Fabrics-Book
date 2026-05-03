@@ -41,16 +41,19 @@ containerlab version
 ```bash
 uv venv .venv && source .venv/bin/activate
 uv pip install ncclient pyang lxml xmltodict deepdiff netmiko paramiko
-# ncclient: Python NETCONF client; pyang: YANG validator and format converter;
-# xmltodict: converts XML to Python dicts; deepdiff: structural diff for nested Python objects;
-# paramiko: Python SSH library (ncclient's transport layer); netmiko: SSH automation library for network CLIs
+# ncclient: Python NETCONF client; 
+# pyang: YANG validator and format converter;
+# xmltodict: converts XML to Python dicts; 
+# deepdiff: structural diff for nested Python objects;
+# paramiko: Python SSH library (ncclient's transport layer); 
+# netmiko: SSH automation library for network CLIs
 ```
 
 Verify the key packages:
 
 ```bash
 python -c "import ncclient; print(ncclient.__version__)"
-# 0.6.x
+# 0.6.xhttps://github.com/leanprover/lean4/tree/master/doc
 pyang --version
 # pyang 2.x.x
 yanglint --version

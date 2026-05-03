@@ -12,7 +12,10 @@ GPU training pods have a networking problem that standard **Kubernetes** cannot 
 
 **SR-IOV** (Single Root I/O Virtualization) is the PCIe hardware feature that makes this practical at scale. A single physical NIC (the Physical Function) can expose up to 127 isolated Virtual Functions, each appearing as an independent PCIe device with its own hardware queues, MAC address, and **RDMA** capability. When a pod is assigned an **SR-IOV** VF, it has a direct hardware path to the NIC's **RDMA** engine — bypassing the host kernel networking stack and enabling **GPUDirect RDMA** transfers directly from GPU memory to the wire.
 
-This chapter covers the complete **Kubernetes** network stack for GPU pods: **Multus** CNI for multi-NIC attachment, **SR-IOV** VF provisioning, the **SR-IOV Network Operator** for cluster-scale automated VF management, the **NVIDIA Network Operator** as an all-in-one deployment bundle, **Whereabouts** for cluster-wide IPAM on secondary networks, and **GPUDirect RDMA** configuration. The lab walkthrough uses **Kind** with macvlan and Soft-**RoCE** to simulate the full stack without real **SR-IOV** hardware.
+This chapter covers the complete **Kubernetes** network stack for GPU pods: **Multus** CNI for multi-NIC attachment, **SR-IOV** VF provisioning, the **SR-IOV Network Operator** for cluster-scale automated VF management, the **NVIDIA Network Operator** as an all-in-one deployment bundle, **Whereabouts** for cluster-wide **IPAM (IP Address Management)** on secondary networks, and **GPUDirect RDMA** configuration. The lab walkthrough uses **Kind** with **macvlan** and Soft-**RoCE** to simulate the full stack without real **SR-IOV** hardware.
+
+- **Macvlan**: a Linux networking driver that allows virtual interfaces (such as Docker containers or VMs) to be assigned unique MAC addresses, making them appear as physical devices directly connected to the network. It enables containers to have their own IP addresses on the same subnet as the host, bypassing the host bridge and improving performance
+- **WhereAbouts**: An IP Address Management (**IPAM**) CNI plugin that assigns IP addresses cluster-wide. Provides a way to assign IP addresses dynamically across all the nodes of a cluster. Whereabouts can be used for both IPv4 & IPv6 addressing.
 
 This chapter builds directly on Chapter 12 (**Cilium** as the primary CNI managing `eth0`) and Chapter 2 (**RoCEv2** and **RDMA** fundamentals). Chapter 19 examines how **NCCL** uses the **RDMA** VFs this chapter provisions to implement ring-allreduce and tree-allreduce collective algorithms across the GPU fabric.
 
@@ -20,7 +23,7 @@ This chapter builds directly on Chapter 12 (**Cilium** as the primary CNI managi
 
 ## Installation
 
-**kubectl**, **Helm**, and **Kind** are the standard **Kubernetes** management tools used to stand up the lab cluster and deploy the **SR-IOV Network Operator** via **Helm** chart. The **rdma-core** and **libibverbs** packages provide the Linux **RDMA** userspace stack, including the `ibv_devinfo` and `ib_write_bw` utilities needed to verify **RDMA** device presence and measure bandwidth inside pods. The `rdma_rxe` kernel module (Soft-**RoCE**) emulates an **RDMA** device over a standard Ethernet interface, making it possible to exercise the full **Multus** annotation, NetworkAttachmentDefinition, and **RDMA** verification workflow in a **Kind** cluster without physical **Mellanox** NICs. This combination allows the chapter's lab to demonstrate multi-NIC pod attachment and **RDMA** path validation on any development machine, with a clear mapping to what changes when real **SR-IOV** Virtual Functions are present.
+**kubectl**, **Helm**, and **Kind** are the standard **Kubernetes** management tools used to stand up the lab cluster and deploy the **SR-IOV Network Operator** via **Helm** chart. The **rdma-core** and **libibverbs** packages provide the Linux **RDMA** userspace stack, including the `ibv_devinfo` and `ib_write_bw` utilities needed to verify **RDMA** device presence and measure bandwidth inside pods. The `rdma_rxe` kernel module (Soft-**RoCE**) emulates an **RDMA** device over a standard Ethernet interface, making it possible to exercise the full **Multus** annotation, `NetworkAttachmentDefinition`, and **RDMA** verification workflow in a **Kind** cluster without physical **Mellanox** NICs. This combination allows the chapter's lab to demonstrate multi-NIC pod attachment and **RDMA** path validation on any development machine, with a clear mapping to what changes when real **SR-IOV** Virtual Functions are present.
 
 ### System Packages (Ubuntu 24.04)
 
@@ -67,6 +70,8 @@ Multus is a CNI meta-plugin: it delegates to other CNI plugins. The primary CNI 
 
 ### 13.2.1 Installation
 
+- Multus is installed as a DaemonSet: 
+- 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset.yml
 
@@ -252,7 +257,7 @@ kubectl get sriovnetworknodestates -n sriov-network-operator -o yaml
 
 ## 13.5 NVIDIA Network Operator
 
-The NVIDIA Network Operator bundles all network components for GPU nodes into a single Helm chart: MOFED driver (Mellanox OFED — the vendor-optimized InfiniBand and Ethernet driver stack that unlocks full RDMA performance on ConnectX NICs), SR-IOV operator, secondary CNI, RDMA device plugin, and NV-IPAM.
+The NVIDIA Network Operator bundles all network components for GPU nodes into a single Helm chart: MOFED driver (Mellanox **OFED** — the vendor-optimized InfiniBand and Ethernet driver stack that unlocks full RDMA performance on ConnectX NICs), SR-IOV operator, secondary CNI, RDMA device plugin, and NV-IPAM.
 
 ### 13.5.1 Installation
 
@@ -334,7 +339,7 @@ NCCL's `NCCL_NET_GDR_LEVEL=SYS` instructs NCCL to use GPUDirect RDMA for all pee
 
 ## 13.7 Whereabouts — Cluster-Wide IPAM
 
-Standard CNI IPAM plugins (host-local) allocate IPs per-node, causing conflicts when pods move. Whereabouts maintains a cluster-wide IP allocation database (backed by etcd or the K8s API) to prevent double-allocation:
+Standard CNI IPAM plugins (host-local) allocate IPs per-node, causing conflicts when pods move. **Whereabouts** maintains a cluster-wide IP allocation database (backed by etcd or the K8s API) to prevent double-allocation:
 
 ```yaml
 # NetworkAttachmentDefinition with Whereabouts IPAM

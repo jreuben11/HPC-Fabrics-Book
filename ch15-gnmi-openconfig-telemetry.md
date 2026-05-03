@@ -8,7 +8,7 @@
 
 Monitoring a thousand-node AI training cluster in real time is not an optional operational nicety — it is a prerequisite for maintaining training efficiency. A single congested switch port, a flapping **BGP** session, or a rising tail-drop rate on one of sixteen ECMP paths can silently stall a distributed all-reduce collective for hundreds of milliseconds, degrading GPU utilization across the entire job. Detecting and diagnosing these events requires telemetry at sub-second granularity, structured in a way that can be queried, alerted on, and visualized without vendor-specific parsing.
 
-**gNMI** (gRPC Network Management Interface) is the streaming telemetry protocol designed for this purpose. It runs over **gRPC** — Google's high-performance RPC framework built on **HTTP/2** and Protocol Buffers — and uses the **OpenConfig** **YANG** path namespace introduced in Chapter 14 as its addressing scheme. Instead of the poll-based **SNMP** model where a management station asks each device for counters every five minutes, **gNMI** uses persistent subscription streams: the collector subscribes to a set of **OpenConfig** paths, and the device pushes updates at the specified interval or whenever a value changes. This inversion eliminates polling overhead on the device, reduces latency from minutes to seconds or less, and delivers structured, self-describing data.
+**gNMI** (**gRPC Network Management Interface**) is the streaming telemetry protocol designed for this purpose. It runs over **gRPC** — Google's high-performance RPC framework built on **HTTP/2** and Protocol Buffers — and uses the **OpenConfig** **YANG** path namespace introduced in Chapter 14 as its addressing scheme. Instead of the poll-based **SNMP** model where a management station asks each device for counters every five minutes, **gNMI** uses persistent subscription streams: the collector subscribes to a set of **OpenConfig** paths, and the device pushes updates at the specified interval or whenever a value changes. This inversion eliminates polling overhead on the device, reduces latency from minutes to seconds or less, and delivers structured, self-describing data.
 
 This chapter covers the **gNMI** protocol's four RPCs and subscription modes, the `gnmic` CLI and collector tool, the **OpenConfig** path namespace for interface counters, **BGP** state, and hardware telemetry, the complete production telemetry pipeline from switch to **Grafana** dashboard, and dial-out telemetry for firewall-constrained environments. **PromQL** expressions for AI cluster-specific monitoring — congestion detection, **BGP** session stability, ECMP imbalance — are derived from first principles.
 
@@ -20,7 +20,7 @@ This chapter closes Part V. Chapter 16 builds on the telemetry foundation establ
 
 ## Installation
 
-**gnmic** is the **gNMI** CLI and collector that drives all protocol interaction in this chapter: it issues Capabilities and Get requests for one-shot inspection, and runs a persistent Subscribe session that exposes collected metrics as a **Prometheus** endpoint. **Prometheus** scrapes that endpoint and stores the time-series data; **Grafana** connects to **Prometheus** as a datasource and renders the dashboards and **PromQL**-based alerts used to detect congestion and **BGP** session instability. **Containerlab** with a Nokia **SR Linux** node provides the **gNMI** target, since **SR Linux** ships with a **gNMI** server that supports both sampled and on-change subscriptions over **OpenConfig** paths. The complete pipeline — **SR Linux** generating live counters, **gnmic** collecting them, **Prometheus** storing them, and **Grafana** visualizing them — is what the lab walkthrough builds end to end.
+**gnmic** is the **gNMI** CLI and collector that drives all protocol interaction in this chapter: it issues `Capabilities` and `Get` requests for one-shot inspection, and runs a persistent `Subscribe` session that exposes collected metrics as a **Prometheus** endpoint. **Prometheus** scrapes that endpoint and stores the time-series data; **Grafana** connects to **Prometheus** as a datasource and renders the dashboards and **PromQL**-based alerts used to detect congestion and **BGP** session instability. **Containerlab** with a Nokia **SR Linux** node provides the **gNMI** target, since **SR Linux** ships with a **gNMI** server that supports both sampled and on-change subscriptions over **OpenConfig** paths. The complete pipeline — **SR Linux** generating live counters, **gnmic** collecting them, **Prometheus** storing them, and **Grafana** visualizing them — is what the lab walkthrough builds end to end.
 
 ### System packages (Ubuntu 24.04)
 
@@ -54,7 +54,7 @@ uv pip install prometheus-client grpcio grpcio-tools protobuf pyyaml
 
 ## 15.1 From SNMP Polling to Streaming Telemetry
 
-SNMP (Simple Network Management Protocol) was designed for 1990s network management: poll a device every 5 minutes, fetch a scalar counter, aggregate in an NMS (Network Management System — a centralized platform that collects, normalizes, and presents device health data). At AI cluster scale this fails in three ways:
+**SNMP (Simple Network Management Protocol)** was designed for 1990s network management: poll a device every 5 minutes, fetch a scalar counter, aggregate in an NMS (Network Management System — a centralized platform that collects, normalizes, and presents device health data). At AI cluster scale this fails in three ways:
 
 1. **Temporal resolution:** A congestion event that causes NCCL to stall for 500ms is invisible at 5-minute polling granularity.
 2. **CPU overhead on devices:** Each SNMP Get generates a context switch and encoding overhead. At high polling rates, this impacts the forwarding plane.
@@ -126,22 +126,22 @@ gnmic -a 192.168.1.1:57400 --skip-verify capabilities
 # Get a single interface's operational state
 gnmic -a 192.168.1.1:57400 --skip-verify get \
     --path /interfaces/interface[name=Ethernet0]/state
-
-# JSON output:
-# {
-#   "source": "192.168.1.1:57400",
-#   "time": "2026-04-22T10:00:00Z",
-#   "updates": [{
-#     "Path": "interfaces/interface[name=Ethernet0]/state",
-#     "values": {
-#       "oper-status": "UP",
-#       "counters": {
-#         "in-octets": 1234567890,
-#         "out-octets": 9876543210
-#       }
-#     }
-#   }]
-# }
+```
+```JSON output:
+ {
+   "source": "192.168.1.1:57400",
+   "time": "2026-04-22T10:00:00Z",
+   "updates": [{
+     "Path": "interfaces/interface[name=Ethernet0]/state",
+     "values": {
+       "oper-status": "UP",
+       "counters": {
+         "in-octets": 1234567890,
+         "out-octets": 9876543210
+       }
+     }
+   }]
+ }
 ```
 
 ### Subscribe (Streaming)

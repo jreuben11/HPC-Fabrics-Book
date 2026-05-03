@@ -1,6 +1,6 @@
 # Chapter 8 — Open Network Operating Systems
 
-**Part III: Programmable Fabric** | ~25 pages
+**Part III: Programmable Fabric** | ~25 pages 
 
 ---
 
@@ -8,15 +8,33 @@
 
 The network operating system (**NOS**) running on a switch determines how that switch is configured, automated, observed, and extended. For most of networking history, that software was proprietary, opaque, and tightly coupled to a single vendor's hardware. The rise of open **NOS**es — driven by hyperscalers who needed to operate networks at a scale and velocity that proprietary platforms could not support — fundamentally changed this equation, and AI cluster operators are the direct beneficiaries.
 
-This chapter surveys the open **NOS** landscape as it applies to AI cluster fabrics. **SONiC** (**Software for Open Networking in the Cloud**) is the production-grade choice for hyperscaler-class switching: a collection of containerized daemons communicating through a **Redis** database, running on any **SAI**-compliant ASIC from **Broadcom**, **Mellanox**, or **Marvell**. **SR Linux** is **Nokia**'s programmability-first **NOS**: every configuration object is **YANG**-modeled, every state path is accessible via **gNMI**, and custom applications can be injected via the **NDK** without forking the **NOS** itself. **FRRouting** (**FRR**) provides the routing control plane — **BGP**, **OSPF**, **IS-IS**, **EVPN** — for both, and is the standard tool for configuring **eBGP** underlay fabrics in AI clusters.
+This chapter surveys the open **NOS** landscape as it applies to AI cluster fabrics. **SONiC** (**Software for Open Networking in the Cloud**) is the production-grade choice for hyperscaler-class switching: a collection of containerized daemons communicating through a **Redis** database, running on any **SAI**-compliant ASIC from Broadcom, Mellanox, or Marvell. **SR Linux** is Nokia's programmability-first NOS: every configuration object is **YANG**-modeled, every state path is accessible via **gNMI**, and custom applications can be injected via the **NDK (NetOps Development Kit)** without forking the NOS itself. **FRRouting** (**FRR**) provides the routing control plane — **BGP**, **OSPF**, **IS-IS**, **EVPN** — for both, and is the standard tool for configuring **eBGP** underlay fabrics in AI clusters.
+
+**SAI (Switch Abstraction Interface)** compliant ASICs are networking chips that implement a standardized API, allowing them to work seamlessly with network operating systems. SAI acts as a "glue" layer between the vendor-specific hardware driver (SDK) and the NOS, ensuring consistent behavior across different hardware platforms.
 
 The reader will learn: how **SONiC**'s **Redis**-centric architecture decouples configuration intent from ASIC programming; how **SR Linux**'s **YANG**-native model enables controller-free automation; how to configure **FRR** for a spine-leaf **eBGP** fabric with **ECMP** and sub-second **BFD** failure detection; and how **Containerlab** composes these **NOS**es into a full lab topology on a single laptop. The chapter also surveys **VyOS**, **DENT**, **OpenWrt**, **FreeRTOS**, and **Zephyr** — the open **NOS** and **RTOS** landscape at the edges of the AI cluster fabric.
 
-The lab walkthrough builds a two-spine, two-leaf **BGP** fabric using **SR Linux** and **SONiC-VS** containers, verifies **ECMP** convergence, simulates a link failure with **BFD**, and streams **gNMI** telemetry from **SR Linux** to **gnmic** — all within **Containerlab** running on **Ubuntu** 24.04.
+The lab walkthrough builds a two-spine, two-leaf **BGP** fabric using **SR Linux** and **SONiC-VS** containers, verifies **ECMP** convergence, simulates a link failure with **BFD**, and streams **gNMI** telemetry from **SR Linux** to **gnmic** CLI — all within **Containerlab** running on **Ubuntu** 24.04.
 
 This chapter connects backward to Chapter 5 (**DPDK**) and Chapter 7 (**eBPF**), which addressed the data-plane performance problems inside individual hosts, and forward to Chapter 14 (**NETCONF**/**YANG**/**RESTCONF**) and Chapter 15 (**gNMI**/**OpenConfig**), which cover the management protocols that open **NOS**es like **SR Linux** expose natively.
 
 ---
+
+## Short explanations of relevant networking protocols 
+
+- **BGP (Border Gateway Protocol)**: The routing protocol that drives the Internet. It is an **exterior gateway protocol (EGP)** used to exchange routing information between different **Autonomous Systems (AS)** or large networks to determine the best paths for traffic.
+- **OSPF (Open Shortest Path First)**: A widely used **interior gateway protocol (IGP)** that helps routers within a single network find the fastest path to a destination. It is a **link-state protocol**, meaning routers share their link status to build a complete map of the network topology.
+- **IS-IS (Intermediate System to Intermediate System)**: A **link-state IGP** similar to **OSPF**, commonly used in service provider and large enterprise core networks. It routes data within a network by determining the best path, offering high scalability and fast convergence.
+- **EVPN (Ethernet Virtual Private Network)**: A modern control plane technology (using **BGP**) that acts as the "brain" for **VXLAN** networks. It enables Layer 2 and Layer 3 connectivity over an IP network, allowing for efficient MAC address learning and reducing unnecessary traffic flooding.
+- **BFD (Bidirectional Forwarding Detection)**: A "hello" protocol designed for extremely fast detection of link failures (often within milliseconds). It acts as an assistant to protocols like **OSPF** or **BGP**, notifying them instantly when a neighbor goes down to allow for rapid rerouting.
+- **Virtual Extensible LAN (VXLAN)**: a networking technology that creates virtualized Layer 2 Ethernet networks (**overlay**) over existing Layer 3 IP networks (**underlay**). It is a **tunneling protocol** designed to overcome the scale, flexibility, and architectural limitations of traditional VLAN-based networks.
+
+## Short explanations of network automation technologies
+- **NETCONF (Network Configuration Protocol)**: A network management protocol (RFC 6241) that provides mechanisms to install, manipulate, and delete the configuration of network devices. It uses XML-based RPC over SSH to manage configurations in a structured, transactional way, often using candidate datastores.
+- **YANG (Yet Another Next Generation)**: A data modeling language used to model configuration and state data of network elements. It defines the structure, syntax, and semantics of data exchanged between **NETCONF/RESTCONF** clients and servers, similar to how SNMP uses MIBs.
+- **RESTCONF (RESTful Configuration Protocol)**: A REST-like API (RFC 8040) that provides a subset of **NETCONF** functionality using HTTP methods. It allows applications to manipulate **YANG**-defined data using JSON or XML over HTTPS, making it easy to use with modern web tools and scripts.
+- **gNMI (gRPC Network Management Interface)**: A modern, high-performance management protocol developed by Google, operating over gRPC for network configuration and streaming telemetry.It uses HTTP/2 for transport and Protocol Buffers for data serialization, allowing for efficient, real-time "on-change" updates rather than just periodic polling.
+- **OpenConfig**: A community-driven initiative creating consistent, vendor-neutral **YANG** models based on actual operational needs. It provides a set of data models—often implemented via gNMI—that allows operators to manage multi-vendor networks using a single, unified configuration structure.
 
 ## Installation
 
@@ -76,7 +94,7 @@ sudo systemctl status frr | grep Active
 
 ### Python automation environment (uv)
 
-`ncclient` is a Python library implementing the NETCONF client protocol (RFC 6241) for configuration management. `netmiko` is a multi-vendor SSH library that simplifies parameterized CLI interactions with network devices from many vendors.
+`ncclient` is a Python library implementing the **NETCONF** client protocol (RFC 6241) for configuration management. `netmiko` is a multi-vendor SSH library that simplifies parameterized CLI interactions with network devices from many vendors.
 
 ```bash
 # Install uv if not already present
@@ -100,7 +118,7 @@ python -c "import ncclient, paramiko, netmiko; print('All imports OK')"
 
 For decades, a network switch was a black box: proprietary ASIC, proprietary OS, proprietary CLI. Configuration required vendor-specific commands, automation required screen-scraping, and replacing the switch meant re-learning everything.
 
-Disaggregation broke this model. The emergence of merchant silicon (Broadcom Tomahawk, Trident, Intel Tofino) — commodity ASICs delivering the same forwarding performance as proprietary chips — enabled a decoupling of hardware from software. The Switch Abstraction Interface (SAI) is an open API specification, maintained by the Open Compute Project, that defines a vendor-neutral C interface between a NOS and the underlying ASIC SDK, so the same NOS binary can target ASICs from multiple vendors without modification.
+Disaggregation broke this model. The emergence of merchant silicon (Broadcom Tomahawk, Trident, Intel Tofino) — commodity ASICs delivering the same forwarding performance as proprietary chips — enabled a decoupling of hardware from software. The **Switch Abstraction Interface (SAI)** is an open API specification, maintained by the **Open Compute Project**, that defines a vendor-neutral C interface between a NOS and the underlying ASIC SDK, so the same NOS binary can target ASICs from multiple vendors without modification.
 
 Three open NOSes now dominate different parts of the AI infrastructure landscape: **SONiC** for hyperscaler DC switching, **SR Linux** for programmability-first environments, and **FRR** as the universal routing engine embedded in both.
 
@@ -134,7 +152,7 @@ SONiC is a collection of containerized networking daemons running on a standard 
 └─────────────────────────────────────────────────────────┘
 ```
 
-Every configuration change follows the same path: write to CONFIG_DB → orchagent (the orchestration agent daemon that translates high-level application state from APP_DB into low-level ASIC_DB entries) reads APP_DB → translates to ASIC_DB entries → syncd (the synchronization daemon that bridges ASIC_DB changes to vendor SAI API calls) calls SAI → ASIC SDK programs the forwarding hardware.
+Every configuration change follows the same path: write to `CONFIG_DB` → `orchagent` (the orchestration agent daemon that translates high-level application state from `APP_DB` into low-level ASIC_DB entries) reads APP_DB → translates to ASIC_DB entries → `syncd` (the synchronization daemon that bridges ASIC_DB changes to vendor SAI API calls) calls SAI → ASIC SDK programs the forwarding hardware.
 
 ### 8.2.2 Redis ConfigDB
 
@@ -187,7 +205,7 @@ docker exec syncd bash
 
 ### 8.2.4 SONiC-VS — Virtual SONiC for Development
 
-SONiC-VS (Virtual Switch) runs SONiC in a VM or container without real ASIC hardware, using a software-simulated SAI. Used for:
+**SONiC-VS (Virtual Switch)** runs SONiC in a VM or container without real ASIC hardware, using a software-simulated SAI. Used for:
 - CI pipelines testing configuration changes
 - Developer workstations
 - Containerlab topologies
@@ -210,7 +228,7 @@ docker pull docker.io/sonicdev/sonic-vs:latest
 
 ### 8.3.1 Design Principles
 
-SR Linux was designed from the ground up with three principles: everything is YANG-modeled (YANG is a data modeling language, defined in RFC 7950, that describes the structure, types, and constraints of network configuration and state data in a machine-readable schema), everything is gNMI-accessible (gNMI, gRPC Network Management Interface, is a gRPC-based protocol for streaming telemetry and configuration management using YANG paths as addresses), and everything is extensible via the NDK (Network Developer Kit). There is no concept of a CLI-only feature — if it exists in SR Linux, it has a YANG path.
+SR Linux was designed from the ground up with three principles: everything is **YANG**-modeled (YANG is a data modeling language, defined in RFC 7950, that describes the structure, types, and constraints of network configuration and state data in a machine-readable schema), everything is **gNMI**-accessible (gNMI, gRPC Network Management Interface, is a gRPC-based protocol for streaming telemetry and configuration management using YANG paths as addresses), and everything is extensible via the **NDK** (Network Developer Kit). There is no concept of a CLI-only feature — if it exists in SR Linux, it has a YANG path.
 
 ### 8.3.2 YANG-Native Configuration
 
@@ -282,7 +300,11 @@ func main() {
 
 ## 8.4 FRRouting (FRR)
 
-FRR is the routing daemon suite that powers BGP, OSPF, IS-IS, EVPN, and more in both SONiC and SR Linux. It is not a full NOS — it provides only the control plane. The forwarding plane is handled by the kernel FIB (on Linux routers) or the ASIC (via SAI in SONiC).
+FRR is the routing daemon suite that powers BGP, OSPF, IS-IS, EVPN, and more in both SONiC and SR Linux. It is not a full NOS — it provides only the control plane. The forwarding plane is handled by the kernel FIB (on Linux routers) or the ASIC (via SAI in SONiC). Components:
+- **FIB (Forwarding Information Base)**: the subset of the **Routing Information Base (RIB)** that contains only the best, active routes installed for packet forwarding. 
+- `zebra` daemon: manages the FIB. It copies these routes into the Linux kernel routing table, allowing the data plane to switch packets efficiently. 
+- `vtysh`: An integrated shell that provides a single, Cisco-like CLI to configure and monitor all running FRR protocol daemons simultaneously.
+- **zserv (Zebra Server)**: the internal API/protocol used by FRR protocol daemons (like BGP or OSPF) to communicate with the central `zebra` daemon for updating the kernel routing table.
 
 ### 8.4.1 Daemon Architecture
 
@@ -324,7 +346,7 @@ write memory
 
 ### 8.4.3 EVPN in FRR
 
-EVPN (Ethernet VPN, RFC 7432) is a BGP address family that distributes MAC and IP reachability information for overlay networks, most commonly used as the control plane for VXLAN tunnels. It replaces the flood-and-learn MAC discovery of traditional bridging with a scalable BGP-based mechanism.
+**EVPN (Ethernet VPN, RFC 7432)** is a **BGP** address family that distributes MAC and IP reachability information for overlay networks, most commonly used as the control plane for **VXLAN** tunnels. It replaces the flood-and-learn MAC discovery of traditional bridging with a scalable BGP-based mechanism.
 
 FRR supports BGP-EVPN natively for VXLAN overlay control:
 
@@ -381,7 +403,7 @@ The three NOSes above handle the data-center switching and routing workloads tha
 
 ### 8.6.1 VyOS
 
-VyOS is a full-featured router NOS built on Debian Linux. It combines FRR for routing, StrongSwan for IPsec VPN, and a unified CLI and configuration system modeled on Vyatta (the original open-source router project). Its strength is the edge and WAN role: BGP peering with upstream providers, policy-based routing, site-to-site VPN, and NAT — capabilities that are not the focus of SONiC or SR Linux.
+VyOS is a full-featured router NOS built on **Debian** Linux. It combines **FRR** for routing, **StrongSwan** for **IPsec** VPN, and a unified CLI and configuration system modeled on **Vyatta** (the original open-source router project). Its strength is the edge and WAN role: BGP peering with upstream providers, policy-based routing, site-to-site VPN, and NAT — capabilities that are not the focus of SONiC or SR Linux.
 
 In AI cluster contexts, VyOS appears at the cluster boundary: the border routers that connect the GPU fabric to the corporate WAN, to cloud on-ramps, or to out-of-band management networks. It also appears in Containerlab as a fully functional virtual router when a more complete edge device is needed than FRR alone provides.
 
@@ -402,15 +424,15 @@ save
 
 ### 8.6.2 DENT
 
-DENT (Disaggregated Ethernet NOS) is a Linux Foundation project targeting enterprise edge and campus switching — the access and distribution layers that connect office networks, campus buildings, and light-industrial environments. It uses the `switchdev` kernel subsystem (rather than SAI) as its hardware abstraction layer. `switchdev` is a Linux kernel framework introduced in 4.0 that allows a physical switch ASIC to be represented as a Linux network device, offloading bridge, FIB, and ACL forwarding entries to the hardware through standard netlink APIs rather than a vendor-specific user-space SDK.
+**DENT (Disaggregated Ethernet NOS)** is a Linux Foundation project targeting enterprise edge and campus switching — the access and distribution layers that connect office networks, campus buildings, and light-industrial environments. It uses the `switchdev` kernel subsystem (rather than SAI) as its hardware abstraction layer. `switchdev` is a Linux kernel framework introduced in 4.0 that allows a physical switch ASIC to be represented as a Linux network device, offloading bridge, FIB, and ACL forwarding entries to the hardware through standard netlink APIs rather than a vendor-specific user-space SDK.
 
-DENT is not used in AI cluster core fabrics, but it is relevant for the out-of-band management networks that every AI cluster requires: the 1GbE or 10GbE switches that carry IPMI/BMC traffic, console server access, and cluster management plane communication. Running DENT on commodity hardware for these management racks aligns with the same open-NOS philosophy as the data plane.
+DENT is **not used in AI cluster core fabrics**, but it is relevant for the out-of-band management networks that every AI cluster requires: the 1GbE or 10GbE switches that carry IPMI/BMC traffic, console server access, and cluster management plane communication. Running DENT on commodity hardware for these management racks aligns with the same open-NOS philosophy as the data plane.
 
 **Docs:** [dent.dev](https://dent.dev)
 
 ### 8.6.3 OpenWrt
 
-OpenWrt is a Linux-based NOS for embedded networking hardware — home routers, industrial gateways, and CPE devices. It uses a custom package manager (`opkg`) and a lightweight configuration framework (`UCI`). OpenWrt is not used inside AI cluster data centers, but understanding it is useful for two reasons:
+OpenWrt is a Linux-based NOS for **embedded** networking hardware — home routers, industrial gateways, and CPE devices. It uses a custom package manager (`opkg`) and a lightweight configuration framework (`UCI`). OpenWrt is not used inside AI cluster data centers, but understanding it is useful for two reasons:
 
 1. **Historical context:** OpenWrt demonstrated that open, Linux-based software on commodity router hardware was practical, predating both SONiC and SR Linux by a decade.
 2. **Lab sensors:** Out-of-band sensors, environmental monitors, and serial console servers in AI cluster deployments sometimes run OpenWrt-derived firmware. Understanding its package model and network configuration (`/etc/config/network`) helps when integrating or debugging these devices.
@@ -419,7 +441,7 @@ OpenWrt is a Linux-based NOS for embedded networking hardware — home routers, 
 
 ### 8.6.4 FreeRTOS
 
-FreeRTOS is a lightweight RTOS (Real-Time Operating System) for microcontrollers. It provides a preemptive task scheduler, inter-task communication primitives (queues, semaphores, event groups), and a TCP/IP stack (`FreeRTOS+TCP`). It has no concept of a network operating system in the SONiC/SR Linux sense — it is the OS running on the microcontroller inside a network device's management card, fan controller, or power supply unit.
+FreeRTOS is a lightweight RTOS (Real-Time Operating System) for **microcontrollers**. It provides a preemptive task scheduler, inter-task communication primitives (queues, semaphores, event groups), and a TCP/IP stack (`FreeRTOS+TCP`). It has no concept of a network operating system in the SONiC/SR Linux sense — it is the OS running on the microcontroller inside a network device's management card, fan controller, or power supply unit.
 
 In AI cluster hardware, FreeRTOS or an equivalent RTOS frequently runs on the BMC (Baseboard Management Controller) or embedded management microcontrollers inside switches and servers. Understanding this layer matters for hardware bringup, firmware debugging, and out-of-band management tooling.
 
@@ -427,7 +449,7 @@ In AI cluster hardware, FreeRTOS or an equivalent RTOS frequently runs on the BM
 
 ### 8.6.5 Zephyr
 
-Zephyr is a Linux Foundation RTOS for constrained and embedded devices. Unlike FreeRTOS (which started as a simple scheduler), Zephyr was designed as a full embedded OS from the start, with a device tree hardware description model, a Kconfig build system, and a broad hardware abstraction layer. It supports over 500 boards and a growing set of network protocols.
+Zephyr is a **Linux Foundation RTOS** for constrained and embedded devices. Unlike FreeRTOS (which started as a simple scheduler), Zephyr was designed as a full embedded OS from the start, with a device tree hardware description model, a **Kconfig** build system, and a broad hardware abstraction layer. It supports over 500 boards and a growing set of network protocols.
 
 **Why Zephyr matters for AI cluster infrastructure:**
 

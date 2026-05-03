@@ -6,7 +6,7 @@
 
 ## Introduction
 
-Every switch deployed before the mid-2010s implemented a forwarding pipeline that was cast in silicon at fabrication time: parse **Ethernet**, look up the MAC table, look up the IP **FIB**, apply access control lists, forward. Vendors could configure the tables, but the pipeline itself was immutable. This rigidity created a fundamental mismatch with the demands of AI cluster networking, where custom telemetry schemes, novel congestion signals, and in-network computation are not optional enhancements but architectural requirements.
+Every switch deployed before the mid-2010s implemented a **forwarding pipeline** that was cast in silicon at fabrication time: parse **Ethernet**, look up the MAC table, look up the IP **FIB**, apply access control lists, forward. Vendors could configure the tables, but the pipeline itself was immutable. This rigidity created a fundamental mismatch with the demands of AI cluster networking, where custom telemetry schemes, novel congestion signals, and in-network computation are not optional enhancements but architectural requirements.
 
 **P4** (**Programming Protocol-Independent Packet Processors**) dissolves this constraint. A **P4** program defines the complete forwarding behavior — which headers to parse, which match-action tables to apply in which order, how to reconstruct the packet for transmission — and is compiled to a target: a software switch for testing, an **FPGA** for prototyping, or a programmable ASIC (such as **Intel Tofino**) for production. This chapter covers the full **P4** toolchain: the **P4₁₆** language itself, the **bmv2** behavioral model for software simulation, the **P4Runtime** **gRPC** control-plane API, and two high-impact applications — in-network AllReduce aggregation and **INT** (**In-band Network Telemetry**) — that are only possible with a programmable data plane.
 
@@ -130,7 +130,7 @@ Controller                    Switch
 
 ### 9.2.3 OpenFlow with OVS and Ryu
 
-**Open vSwitch** (OVS) is an open-source, production-quality virtual switch that runs in the Linux kernel or as a DPDK user-space process. It implements OpenFlow 1.0 through 1.5, supports hardware offload to physical NICs, and is the forwarding engine underneath Kubernetes network plugins such as OVN-Kubernetes and OpenStack Neutron. It exposes the flow table via `ovs-ofctl`. **Ryu** is a lightweight Python controller framework that connects to OVS over the OpenFlow protocol.
+**Open vSwitch** (**OVS**) is an open-source, production-quality virtual switch that runs in the Linux kernel or as a DPDK user-space process. It implements OpenFlow 1.0 through 1.5, supports hardware offload to physical NICs, and is the forwarding engine underneath Kubernetes network plugins such as OVN-Kubernetes and OpenStack Neutron. It exposes the flow table via `ovs-ofctl`. **Ryu** is a lightweight Python controller framework that connects to OVS over the OpenFlow protocol.
 
 Install Ryu:
 
@@ -235,7 +235,7 @@ OpenFlow proved the SDN concept but hit fundamental limits that motivated P4:
 
 For production networks, two controllers dominate the enterprise and carrier OpenFlow deployments:
 
-**ONOS** (Open Network Operating System) is the production OpenFlow controller used by AT&T (CORD — Central Office Re-architected as a Datacenter — an ONF platform for virtualizing telecom central offices using commodity servers and open-source networking software), Comcast, and SK Telecom. It provides a distributed, high-availability controller cluster with a northbound intent API and southbound OpenFlow/P4Runtime/NETCONF adapters.
+**ONOS** (**Open Network Operating System**) is the production OpenFlow controller used by AT&T (CORD — Central Office Re-architected as a Datacenter — an ONF platform for virtualizing telecom central offices using commodity servers and open-source networking software), Comcast, and SK Telecom. It provides a distributed, high-availability controller cluster with a northbound intent API and southbound OpenFlow/P4Runtime/NETCONF adapters.
 
 ```bash
 # Run ONOS in Docker (single-node for lab use)
@@ -252,9 +252,11 @@ onos> apps -a -s   # list active applications
 onos> flows        # show all installed flows
 ```
 
-**OpenDaylight** (ODL) is a Linux Foundation controller with a broader scope — it supports OpenFlow, NETCONF, BGP, and PCEP from a single platform. It is more commonly used in enterprise and WAN SDN than pure data-center OpenFlow.
+**OpenDaylight** (**ODL**) is a Linux Foundation controller with a broader scope — it supports OpenFlow, NETCONF, BGP, and PCEP from a single platform. It is more commonly used in enterprise and WAN SDN than pure data-center OpenFlow.
 
-**Relevance to AI clusters:** In modern AI cluster fabrics, OpenFlow is primarily encountered via OVN (Open Virtual Network — a logical networking layer built on top of OVS that translates high-level Kubernetes network policies and load-balancing rules into OpenFlow table entries, used by the OVN-Kubernetes CNI plugin) and via Cilium's eBPF dataplane (which provides equivalent programmability without a controller channel). For in-network AI computing (AllReduce aggregation, INT telemetry), P4 on ASIC targets is the correct tool — OpenFlow cannot express stateful accumulation.
+**Path Computation Element Communication Protocol (PCEP)**: a TCP-based protocol defined by the Internet Engineering Task Force (IETF) path computation element (PCE) working group. It defines a set of messages and objects used to manage PCEP sessions and to request and send paths for inter-domain **traffic engineering (TE)** **label switched paths (LSPs)**. PCEP provides a mechanism for a PCE to compute inter-domain LSPs for PCCs. PCEP interactions cover LSP state reporting from the PCCs to the PCE as well as the LSP delegation and optimization performed by the PCE.
+
+**Relevance to AI clusters:** In modern AI cluster fabrics, OpenFlow is primarily encountered via **OVN** (**Open Virtual Network** — a logical networking layer built on top of OVS that translates high-level Kubernetes network policies and load-balancing rules into OpenFlow table entries, used by the **OVN-Kubernetes** CNI plugin) and via **Cilium's eBPF dataplane** (which provides equivalent programmability without a controller channel). For in-network AI computing (AllReduce aggregation, INT telemetry), P4 on ASIC targets is the correct tool — OpenFlow cannot express stateful accumulation.
 
 ---
 
@@ -262,7 +264,7 @@ onos> flows        # show all installed flows
 
 ### 9.3.1 Architecture Model
 
-A P4 program targets an **architecture**: an abstract model of a programmable pipeline. The most common is V1Model (used by `bmv2`):
+A P4 program targets an **architecture**: an abstract model of a programmable pipeline. The most common is **V1Model** (used by `bmv2`):
 
 ```
 ingress_port → [Parser] → [Ingress Pipeline] → [Traffic Manager] → [Egress Pipeline] → [Deparser] → egress_port
@@ -421,7 +423,7 @@ Tofino's stateful ALUs enable in-switch computation: register arrays that accumu
 
 ## 9.5 P4Runtime — Control Plane API
 
-P4Runtime is a gRPC API for managing table entries in a running P4 target:
+**P4Runtime** is a gRPC API for managing table entries in a running P4 target:
 
 ```protobuf
 // p4/v1/p4runtime.proto (simplified)

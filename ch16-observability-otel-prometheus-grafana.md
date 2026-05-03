@@ -143,7 +143,7 @@ service:
 
 ## 16.3 Prometheus and Exporters
 
-Prometheus scrapes metrics from *exporters* — small HTTP servers that translate a data source's native instrumentation into the Prometheus text format. The DCGM exporter (Data Center GPU Manager exporter) is NVIDIA's official Prometheus exporter for GPU telemetry; it communicates with the DCGM daemon, which reads GPU counters directly from the driver without performance-monitoring overhead. `gnmic` is a gNMI client that can subscribe to OpenConfig telemetry streams from switches and re-expose the data as a Prometheus metrics endpoint, bridging switch-level telemetry into the same Prometheus stack as host and GPU metrics.
+Prometheus scrapes metrics from *exporters* — small HTTP servers that translate a data source's native instrumentation into the Prometheus text format. The DCGM exporter (**Data Center GPU Manager exporter**) is NVIDIA's official Prometheus exporter for GPU telemetry; it communicates with the DCGM daemon, which reads GPU counters directly from the driver without performance-monitoring overhead. `gnmic` is a gNMI client that can subscribe to OpenConfig telemetry streams from switches and re-expose the data as a Prometheus metrics endpoint, bridging switch-level telemetry into the same Prometheus stack as host and GPU metrics.
 
 ### Key Exporters for AI Clusters
 
@@ -295,7 +295,7 @@ increase(hubble_drop_total{reason="POLICY_DENIED"}[5m])
 
 ## 16.6 Telegraf for Infrastructure Metrics
 
-Telegraf is a plugin-driven metrics collection agent from InfluxData. It supports over 300 input plugins, making it the practical choice for infrastructure sources that lack native Prometheus exporters. SNMP (Simple Network Management Protocol) is the legacy polling protocol used by virtually all network devices to expose interface counters, error rates, and device status via a standardized MIB (Management Information Base) hierarchy. IPMI (Intelligent Platform Management Interface) is a hardware-level management interface that exposes CPU temperature, fan speed, power consumption, and other baseboard sensors independently of the operating system.
+Telegraf is a plugin-driven metrics collection agent from **InfluxData**. It supports over 300 input plugins, making it the practical choice for infrastructure sources that lack native Prometheus exporters. SNMP (Simple Network Management Protocol) is the legacy polling protocol used by virtually all network devices to expose interface counters, error rates, and device status via a standardized **MIB (Management Information Base)** hierarchy.** IPMI (Intelligent Platform Management Interface)** is a hardware-level management interface that exposes CPU temperature, fan speed, power consumption, and other baseboard sensors independently of the operating system.
 
 Telegraf handles metrics that Prometheus doesn't scrape well — SNMP, IPMI, NIC-specific stats:
 

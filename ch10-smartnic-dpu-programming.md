@@ -10,6 +10,10 @@ Modern GPU servers contain an architectural tension: the host CPU must simultane
 
 A **DPU** is a **SmartNIC** that integrates a high-performance NIC ASIC with a full general-purpose compute subsystem — **ARM** cores, local DRAM, and **PCIe** connectivity to the host — on a single card. From the host's perspective, a **DPU** appears as a standard **PCIe** NIC with **SR-IOV** virtual functions. From the fabric's perspective, it is a 400 Gbps network endpoint. On the **DPU** itself, a full **Linux** environment runs an independent software stack: **OVS-DPDK** for virtual switching, **RDMA** proxy for multi-tenant isolation, **IPsec** for encryption, and telemetry agents — all without consuming a single host CPU cycle.
 
+Note:
+- **Single Root I/O Virtualization (SR-IOV)**: a a PCIe standard that allows a single physical network adapter to appear as multiple virtual devices (Virtual Functions, each with dedicated queues and hardware isolation) to a hypervisor, bypassing the software switch layer. It enables near-bare-metal network performance in virtual machines (VMs) by allowing direct hardware access, reduced CPU overhead, and lower latency. 
+- **IPSec (Internet Protocol Security)**: a suite of protocols designed to secure network communications by authenticating and encrypting each IP packet in a data stream. Operating at the network layer (Layer 3), it ensures data confidentiality, integrity, and authenticity, making it the industry standard for creating secure virtual private networks (VPNs) over public networks
+
 This chapter covers the **DPU** architecture using **NVIDIA BlueField-3** as the primary reference, the **DOCA** (**Data Center Infrastructure on a Chip Architecture**) SDK for **DPU** application development, **OVS-DPDK** offload to the **DPU** **ARM** cores, **eBPF** offload to NIC silicon, and **P4**/**PNA** programs on **SmartNIC** targets such as **AMD Pensando DSC**. Each technology is placed in the context of AI cluster deployment patterns: which workloads belong on the **DPU**, which stay on the host, and how the **DPU**'s management isolation enables secure multi-tenant GPU infrastructure.
 
 The lab walkthrough uses **OVS-DPDK** running on the host as a functional stand-in for **DPU** **OVS** — the architecture, configuration, and observability tooling are identical — and the **DOCA** development container to compile a flow steering example without requiring physical **BlueField** hardware.
@@ -24,7 +28,7 @@ The `openvswitch-dpdk` package installs **OVS-DPDK**, which serves as a host-sid
 
 ### OVS-DPDK (host-side stand-in for DPU OVS)
 
-OVS-DPDK is the DPDK-accelerated data path for Open vSwitch (OVS). Standard OVS uses the kernel's network stack and context switches for packet processing; OVS-DPDK moves the forwarding plane entirely to user space using DPDK poll-mode drivers, eliminating interrupt and system-call overhead. On a DPU, OVS-DPDK runs on the ARM cores and offloads matched flows to the ConnectX ASIC for wire-rate forwarding.
+OVS-DPDK is the DPDK-accelerated data path for **Open vSwitch (OVS)**. Standard OVS uses the kernel's network stack and context switches for packet processing; OVS-DPDK moves the forwarding plane entirely to user space using DPDK poll-mode drivers, eliminating interrupt and system-call overhead. On a DPU, OVS-DPDK runs on the ARM cores and offloads matched flows to the **ConnectX** ASIC for wire-rate forwarding.
 
 ```bash
 sudo apt install -y openvswitch-switch openvswitch-dpdk
@@ -115,7 +119,7 @@ make -j$(nproc)
 A Data Processing Unit (DPU) is a SmartNIC with general-purpose compute: ARM cores, memory, and a high-performance NIC ASIC on a single PCIe card. In an AI cluster, the DPU sits between the host CPU and the network, making it the natural place to run:
 
 - OVS-DPDK (vSwitch) without consuming host CPU cores
-- RDMA proxy and GPUDirect acceleration (GPUDirect RDMA is an NVIDIA technology that allows the NIC to DMA data directly into GPU memory, bypassing the host CPU and system DRAM entirely, critical for low-latency NCCL collective operations)
+- RDMA proxy and **GPUDirect** acceleration (GPUDirect RDMA is an NVIDIA technology that allows the NIC to DMA data directly into GPU memory, bypassing the host CPU and system DRAM entirely, critical for low-latency NCCL collective operations)
 - IPsec / TLS termination for secure multi-tenant fabrics
 - Network telemetry collection without host involvement
 - P4 programs compiled to the NIC ASIC
@@ -126,7 +130,7 @@ The key value proposition: host CPU cores freed from networking tasks are availa
 
 | Class | Examples | Capabilities |
 |---|---|---|
-| Standard NIC | Mellanox ConnectX-6 | RDMA, SR-IOV (Single Root I/O Virtualization — a PCIe standard that allows a single physical NIC to present multiple Virtual Functions to VMs or containers, each with dedicated queues and hardware isolation), hardware offloads |
+| Standard NIC | Mellanox ConnectX-6 | RDMA, SR-IOV, hardware offloads |
 | SmartNIC | Netronome Agilio, Pensando DSC | Programmable forwarding (P4/eBPF), limited compute |
 | DPU | NVIDIA BlueField-3, AMD Pensando Elba, Marvell OCTEON | Full ARM SoC + high-port NIC ASIC, runs Linux |
 
@@ -248,7 +252,7 @@ DPU (ARM):
   Network fabric (400GbE)
 ```
 
-`vhost-user` is a userspace implementation of the Linux vhost protocol that uses a Unix domain socket and shared memory to transfer packet buffer descriptors between a guest VM or container and an OVS-DPDK process, eliminating kernel involvement from the fast-path packet transfer. `virtio` is the paravirtualized I/O standard that the guest VM uses to communicate with the virtual NIC presented by the host or DPU.
+`vhost-user` is a userspace implementation of the Linux **vhost** protocol that uses a Unix domain socket and shared memory to transfer packet buffer descriptors between a guest VM or container and an OVS-DPDK process, eliminating kernel involvement from the fast-path packet transfer. `virtio` is the paravirtualized I/O standard that the guest VM uses to communicate with the virtual NIC presented by the host or DPU.
 
 ### Configuration
 
@@ -586,7 +590,7 @@ sudo ovs-ofctl dump-flows br-dpdk | grep "priority=3\|priority=2[5]"
 
 ### Step 7 — Demonstrate Hardware Offload Concepts with PMD Stats
 
-Even without a physical offload-capable NIC, you can observe the DPDK PMD (Poll Mode Driver — a user-space driver that continuously polls NIC hardware queues rather than waiting for interrupts, trading CPU cycles for deterministic low-latency packet processing) statistics to understand how offload telemetry would appear on a real DPU:
+Even without a physical offload-capable NIC, you can observe the DPDK **PMD** (**Poll Mode Driver** — a user-space driver that continuously polls NIC hardware queues rather than waiting for interrupts, trading CPU cycles for deterministic low-latency packet processing) statistics to understand how offload telemetry would appear on a real DPU:
 
 ```bash
 # Show PMD thread statistics (shows which CPU cores are polling which ports)
@@ -682,9 +686,8 @@ pkg-config --modversion doca-flow
 
 Inside the DOCA container, create the C source file:
 
-```bash
-mkdir -p /workspace/flow_example
-cat > /workspace/flow_example/flow_steer.c << 'EOF'
+```C
+# /workspace/flow_example/flow_steer.c 
 /*
  * flow_steer.c — Minimal DOCA Flow example
  * Initialises the DOCA framework, queries available devices,
@@ -745,13 +748,14 @@ int main(void)
     printf("flow_steer: done.\n");
     return EXIT_SUCCESS;
 }
-EOF
+
 ```
 
 Create `CMakeLists.txt` in the container:
+  - /workspace/flow_example/CMakeLists.txt:
 
-```bash
-cat > /workspace/flow_example/CMakeLists.txt << 'EOF'
+```CMake
+
 cmake_minimum_required(VERSION 3.20)
 project(doca_flow_example C)
 
@@ -761,7 +765,6 @@ pkg_check_modules(DOCA REQUIRED doca-flow doca-common)
 add_executable(flow_steer flow_steer.c)
 target_include_directories(flow_steer PRIVATE ${DOCA_INCLUDE_DIRS})
 target_link_libraries(flow_steer ${DOCA_LIBRARIES})
-EOF
 ```
 
 Build inside the container:

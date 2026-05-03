@@ -8,11 +8,11 @@
 
 **Kubernetes** was designed with a flat pod-networking model: every pod gets an IP, every pod can reach every other pod, and a component called `kube-proxy` implements Service load balancing by installing **iptables** rules. This model works at small scale, but in AI clusters running hundreds of GPU nodes and thousands of pods, the **iptables** approach breaks down under O(N) rule traversal, O(N) update time, and complete absence of per-flow observability. A failed **NCCL** collective that blocks gradient synchronization may be caused by a dropped packet anywhere in the overlay, but traditional **Kubernetes** gives operators no tool to see it.
 
-**Cilium** is a **Kubernetes** CNI (Container Network Interface) plugin that replaces **iptables** and **kube-proxy** entirely with **eBPF** programs. **eBPF** (extended Berkeley Packet Filter) is a Linux kernel subsystem that allows sandboxed programs to be loaded into the kernel at runtime and attached to network hooks — without kernel modules or kernel recompilation. **Cilium** attaches **eBPF** programs to each pod's virtual network interface, implementing network policy enforcement, Service load balancing, and traffic observability in O(1) hash-map lookups rather than O(N) rule chains.
+**Cilium** is a **Kubernetes** **CNI (Container Network Interface)** plugin that replaces **iptables** and **kube-proxy** entirely with **eBPF** programs. **eBPF** (extended Berkeley Packet Filter) is a Linux kernel subsystem that allows sandboxed programs to be loaded into the kernel at runtime and attached to network hooks — without kernel modules or kernel recompilation. **Cilium** attaches **eBPF** programs to each pod's virtual network interface, implementing network policy enforcement, Service load balancing, and traffic observability in O(1) hash-map lookups rather than O(N) rule chains.
 
-This chapter covers **Cilium**'s architecture, the BPF datapath mechanics, identity-based network policy, **kube-proxy** replacement with Service BPF maps, Direct Server Return (DSR), **BGP** Control Plane integration with the fabric, and **Hubble** — **Cilium**'s per-flow observability layer. Each section builds toward the practical concern of an AI cluster operator: how do you enforce isolation between training jobs, debug a connectivity failure between **NCCL** workers, and verify that your network policies are not silently dropping gradient-synchronization traffic?
+This chapter covers **Cilium**'s architecture, the BPF datapath mechanics, identity-based network policy, **kube-proxy** replacement with Service BPF maps, **Direct Server Return (DSR)**, **BGP** Control Plane integration with the fabric, and **Hubble** — **Cilium**'s per-flow observability layer. Each section builds toward the practical concern of an AI cluster operator: how do you enforce isolation between training jobs, debug a connectivity failure between **NCCL** workers, and verify that your network policies are not silently dropping gradient-synchronization traffic?
 
-The lab walkthrough deploys a **Kind** (Kubernetes-in-Docker) cluster with **Cilium** as the sole CNI, demonstrates policy enforcement between trainer and gpu-worker pods, and uses **Hubble**'s CLI and web UI to trace FORWARDED and DROPPED flows in real time.
+The lab walkthrough deploys a **Kind** (**Kubernetes-in-Docker**) cluster with **Cilium** as the sole CNI, demonstrates policy enforcement between trainer and gpu-worker pods, and uses **Hubble**'s CLI and web UI to trace FORWARDED and DROPPED flows in real time.
 
 This chapter sits at the intersection of Chapters 7 (**eBPF** and **XDP** fundamentals) and 11 (overlay networking). Chapter 13 extends the picture by adding **SR-IOV** secondary interfaces to the same pods — enabling **RDMA** traffic to coexist with **Cilium**-managed management traffic in a single multi-NIC GPU pod.
 
@@ -84,7 +84,7 @@ python -c "import kubernetes, yaml, requests; print('OK')"
 
 ## 12.1 Why Kubernetes Networking Needed Reinventing
 
-Kubernetes' original network model assumed iptables: a set of NAT and filter rules installed by `kube-proxy` — the Kubernetes component responsible for implementing Service virtual IPs by programming iptables DNAT rules on every node — to implement Services. At 100 pods per node and 1000 nodes, this means:
+Kubernetes' original network model assumed iptables: a set of NAT and filter rules installed by `kube-proxy` — the Kubernetes component responsible for implementing Service virtual IPs by programming iptables **DNAT** rules on every node — to implement Services. At 100 pods per node and 1000 nodes, this means:
 - 100,000+ iptables rules per node
 - O(N) rule traversal per packet for random Service selection
 - Rule update time O(N) on every Service change — blocking traffic during update
@@ -253,7 +253,7 @@ spec:
           path: /healthz
 ```
 
-L7 policy is enforced by an Envoy sidecar managed by Cilium — the BPF program redirects matching traffic to local Envoy for L7 inspection. Envoy is a high-performance L7 proxy originally built at Lyft; Cilium uses it as a transparent HTTP/gRPC inspection engine without requiring application changes.
+L7 policy is enforced by an **Envoy** sidecar managed by **Cilium** — the BPF program redirects matching traffic to local Envoy for L7 inspection. Envoy is a high-performance L7 proxy originally built at Lyft; Cilium uses it as a transparent HTTP/gRPC inspection engine without requiring application changes.
 
 ---
 
@@ -349,7 +349,7 @@ In XDP mode, load-balanced external traffic is handled at line rate with no kern
 
 ## Lab Walkthrough 12 — Cilium Policy and Hubble
 
-This walkthrough builds a Kind cluster with Cilium as the CNI, deploys trainer and gpu-worker pods, tests connectivity before and after applying a CiliumNetworkPolicy, and uses Hubble to observe forwarded and dropped flows. Kind (Kubernetes in Docker) runs a multi-node Kubernetes cluster entirely inside Docker containers — each "node" is a container — making it ideal for local CNI development and testing without real VMs.
+This walkthrough builds a Kind cluster with Cilium as the CNI, deploys trainer and gpu-worker pods, tests connectivity before and after applying a `CiliumNetworkPolicy`, and uses Hubble to observe forwarded and dropped flows. Kind (Kubernetes in Docker) runs a multi-node Kubernetes cluster entirely inside Docker containers — each "node" is a container — making it ideal for local CNI development and testing without real VMs.
 
 ### Step 1 — Write the Kind cluster configuration
 

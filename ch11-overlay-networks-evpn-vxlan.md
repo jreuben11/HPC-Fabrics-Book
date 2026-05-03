@@ -6,9 +6,9 @@
 
 ## Introduction
 
-AI compute clusters run two fundamentally different classes of network traffic simultaneously. The first is the GPU-to-GPU collective communication fabric — low-latency, high-bandwidth **RDMA** flows that must cross the physical network without encapsulation overhead. The second is the management and multi-tenant fabric — container orchestration, storage access, monitoring pipelines, and tenant isolation — where the ability to define isolated Layer 2 domains across a shared routed underlay is essential. This chapter addresses the second class.
+AI compute clusters run two fundamentally different classes of network traffic simultaneously. The first is the **GPU-to-GPU collective communication fabric** — low-latency, high-bandwidth **RDMA** flows that must cross the physical network without encapsulation overhead. The second is the **management and multi-tenant fabric** — container orchestration, storage access, monitoring pipelines, and tenant isolation — where the ability to define isolated Layer 2 domains across a shared routed underlay is essential. This chapter addresses the second class.
 
-**VXLAN** (Virtual Extensible LAN) and **BGP-EVPN** (Ethernet VPN) are the industry-standard answer for building scalable overlay networks on top of a pure IP underlay. **VXLAN** extends Ethernet frames across the IP fabric using **UDP** encapsulation with 24-bit segment identifiers, providing 16 million logical isolation domains in place of the 4094 VLAN limit. **BGP-EVPN** eliminates the flooding required to learn remote MAC and IP addresses by distributing that reachability information as **BGP** routes, enabling data centers with thousands of endpoints to operate without BUM (Broadcast, Unknown-unicast, Multicast) flooding at scale.
+**VXLAN** (**Virtual Extensible LAN**) and **BGP-EVPN** (**Ethernet VPN**) are the industry-standard answer for building scalable overlay networks on top of a pure IP underlay. **VXLAN** extends Ethernet frames across the IP fabric using **UDP** encapsulation with 24-bit segment identifiers, providing 16 million logical isolation domains in place of the 4094 VLAN limit. **BGP-EVPN** eliminates the flooding required to learn remote MAC and IP addresses by distributing that reachability information as **BGP** routes, enabling data centers with thousands of endpoints to operate without **BUM (Broadcast, Unknown-unicast, Multicast)** flooding at scale.
 
 **Open vSwitch** (**OVS**) and **Open Virtual Network** (**OVN**) bring this overlay model into the host: **OVS** is a production-quality software switch with kernel and **DPDK** fast paths that implements **VXLAN** tunneling and an **OpenFlow**-programmable forwarding pipeline, while **OVN** adds a logical abstraction layer — logical switches, routers, and ACLs — that **OVN** compiles down to per-host **OVS** flow rules. Together they form the datapath that **Kubernetes** CNIs such as **OVN-Kubernetes** rely on to implement pod networking.
 
@@ -20,7 +20,9 @@ This chapter sits within Part IV alongside Chapters 12 and 13. Chapter 12 builds
 
 ## Installation
 
-The chapter requires **iproute2** and **bridge-utils** to create and inspect **VXLAN** interfaces, bridge FDB entries, and VTEP state directly from the Linux kernel. **Open vSwitch** (`ovs-vsctl`, `ovs-ofctl`) provides the software switch datapath and the **OpenFlow** pipeline that **OVN** compiles logical network definitions into. **FRR** (Free Range Routing), specifically the bgpd and zebra daemons, runs the **BGP-EVPN** control plane that distributes MAC/IP reachability across VTEPs, eliminating the flooding that would otherwise be required. **Containerlab** is used to wire together the four-leaf, two-spine lab topology with **SR Linux** spines and **SONiC-VS** leaves, giving a realistic fabric to exercise the full **EVPN**-**VXLAN** stack.
+The chapter requires **iproute2** and **bridge-utils** to create and inspect **VXLAN** interfaces, bridge **FDB** entries, and **VTEP** state directly from the Linux kernel. **Open vSwitch** (`ovs-vsctl`, `ovs-ofctl`) provides the software switch datapath and the **OpenFlow** pipeline that **OVN** compiles logical network definitions into. **FRR** (Free Range Routing), specifically the bgpd and zebra daemons, runs the **BGP-EVPN** control plane that distributes MAC/IP reachability across VTEPs, eliminating the flooding that would otherwise be required. **Containerlab** is used to wire together the four-leaf, two-spine lab topology with **SR Linux** spines and **SONiC-VS** leaves, giving a realistic fabric to exercise the full **EVPN**-**VXLAN** stack.
+
+- **Virtual Tunnel Endpoint (VTEP)**: is a networking device or software component that encapsulates and decapsulates packets in VXLAN (Virtual Extensible LAN) overlay networks, bridging Layer 2 traffic over Layer 3 infrastructure. It acts as the tunnel endpoint for virtual machine or container traffic, facilitating network virtualization in data centers
 
 ### System packages (Ubuntu 24.04)
 
@@ -38,7 +40,7 @@ containerlab version
 
 ### FRR (for host containers and bare-metal testing)
 
-FRR (Free Range Routing) is an open-source IP routing suite that implements BGP, OSPF, IS-IS, and other protocols. It is used here to run BGP-EVPN on Linux hosts and leaf switches.
+FRR (**Free Range Routing**) is an open-source IP routing suite that implements BGP, OSPF, IS-IS, and other protocols. It is used here to run BGP-EVPN on Linux hosts and leaf switches.
 
 ```bash
 sudo apt install -y frr frr-pythontools
@@ -144,7 +146,7 @@ bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 10.0.0.3
 
 ## 11.3 BGP-EVPN — Control Plane for VXLAN
 
-Without a control plane, VTEPs learn remote MAC/IP mappings via flooding (BUM traffic). This doesn't scale. EVPN (RFC 7432, RFC 8365) distributes MAC/IP reachability via BGP, eliminating flooding at scale.
+Without a control plane, VTEPs learn remote MAC/IP mappings via **flooding** (BUM traffic). Flooding is used in computer network routing algorithms in which every incoming packet is sent through every outgoing link except the one it arrived on. This doesn't scale. EVPN (RFC 7432, RFC 8365) distributes MAC/IP reachability via BGP, eliminating flooding at scale.
 
 ### 11.3.1 EVPN Route Types
 
@@ -205,6 +207,7 @@ router bgp 65001
 ## 11.4 Open vSwitch (OVS)
 
 OVS is a production-quality software switch implementing IEEE 802.1Q VLANs, LACP, BFD, VXLAN, and OpenFlow. It is the datapath for OVN and is used by Kubernetes CNIs (Calico OVS mode, OVN-Kubernetes).
+- **Link Aggregation Control Protocol (LACP)**, defined in IEEE 802.1AX (formerly 802.3ad), is a standard protocol used to bundle multiple physical Ethernet links into a single logical channel (**Link Aggregation Group - LAG**). It provides increased bandwidth, redundancy, and load balancing between network devices. LACP dynamically manages these links by exchanging packets (**LACPDU**s) to negotiate configuration.
 
 ### 11.4.1 OVS Architecture
 
