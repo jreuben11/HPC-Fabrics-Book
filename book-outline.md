@@ -33,6 +33,16 @@ The invariants every other chapter builds on: cluster topology, the RDMA transpo
 - `rdma-core`, `perftest` benchmarking workflow (`ib_write_bw`, `ib_read_lat`)
 - *Lab: measure bandwidth and latency across a two-node RoCEv2 Containerlab topology*
 
+### Chapter 34 — Congestion Control & the Ultra Ethernet Consortium (15 pp)
+- Why DCQCN exists: the bandwidth-delay product problem, ECN marking in the switch ASIC, the NIC rate limiter feedback loop
+- **DCQCN** algorithm in depth: α decay, rate increase/decrease state machine, `Kmin`/`Kmax`/`Pmax` parameters; `mlxconfig` and switch ECN threshold configuration; `mlxreg` for per-port DCQCN knobs
+- PFC and its pathologies: head-of-line blocking, PFC pause propagation, deadlock formation, watchdog auto-disable (cross-ref Ch24, Ch28)
+- Beyond DCQCN: **Swift** (Google — RTT-based, no ECN required), **HPCC** (Alibaba — INT-feedback precise rate control), **TIMELY** (Microsoft — latency gradient), comparison table
+- RoCEv2's reorder intolerance: why 5-tuple ECMP causes out-of-order delivery and what it does to RDMA QPs (cross-ref Ch27 packet spraying)
+- **Ultra Ethernet Consortium (UEC)**: formation (2023, AMD/Broadcom/Cisco/HPE/Intel/Meta/Microsoft), design goals — packet spraying with reorder tolerance, new CC algorithm, retransmit without PFC, lossless semantics without pause frames; UET (Ultra Ethernet Transport) spec status; timeline and adoption outlook
+- Lossless vs. lossy fabric tradeoff: PFC elimination path, selective retransmit, UEC vs. InfiniBand lossless model
+- *Lab: DCQCN parameter sweep with soft-RoCE (`rdma_rxe`); ECN threshold measurement with `tc qdisc` RED; visualise queue depth vs. throughput*
+
 ### Chapter 3 — Precision Time Protocol (15 pp)
 - Why distributed training and RoCE ECN timestamping both demand sub-microsecond synchronization
 - IEEE 1588v2 / PTPv2: grandmaster, boundary clock, transparent clock, BMCA
@@ -169,6 +179,19 @@ Wiring GPU pods into the fabric through container networking and overlay protoco
 - GPU-direct RDMA in Kubernetes: peer memory, GPUDirect storage
 - *Lab: launch a pod with a management CNI (Cilium) + RDMA secondary NIC (SR-IOV) and run NCCL-tests across two pods*
 
+### Chapter 31 — GPU Virtualization & Isolation: VFIO, MIG, MPS & KubeVirt (25 pp)
+- GPU isolation taxonomy: bare-metal, VFIO passthrough, vGPU (NVIDIA vGPU/MxGPU), partitioning (MIG), container — when each model applies and its performance ceiling
+- **VFIO-PCI**: IOMMU groups, `vfio-pci` driver binding, `iommu=pt` kernel cmdline, ACS override patch, ROM BAR issues
+- **KVM/QEMU** GPU passthrough: QEMU device assignment, OVMF UEFI firmware, `qemu-system-x86_64` hostdev flags, hugepage-backed guest RAM
+- **LibVirt/virsh**: XML domain `<hostdev>` PCI passthrough, `virsh nodedev-detach`, network backend choices — Linux bridge, macvtap, SR-IOV VF direct assignment
+- **Proxmox VE** (in depth): PCIe passthrough setup (IOMMU, ROM dump, `pcie=1`), PCIe bifurcation for multi-GPU hosts, VM disk management (`qm` CLI, `pvesh` REST API), Proxmox networking stack (Linux bridge, Open vSwitch mode, SDN VXLAN/EVPN plugin), cluster quorum with **Corosync**, HA fencing and resource agents, Ceph integration for VM storage (RBD pool, `rbd:` storage definition)
+- **NVIDIA MIG** (Multi-Instance GPU): GI/CI hierarchy, `nvidia-smi mig`, profile catalogue (1g.10gb → 7g.80gb on H100/A100), MIG in Kubernetes via NVIDIA GPU Operator (`strategy: mixed`), NCCL collective behavior across MIG slices
+- **NVIDIA MPS** (Multi-Process Service): CUDA context sharing model, `nvidia-cuda-mps-control` daemon, per-client memory limits, MPS vs MIG tradeoffs — isolation vs sharing granularity, latency impact on all-reduce
+- **KubeVirt**: `VirtualMachine`/`VMI` CRDs, `virtctl` CLI, network binding modes (bridge, masquerade, SR-IOV), GPU passthrough via `devices.gpus`, live migration constraints when GPUs are attached, `DataVolume` for VM disk provisioning
+- Networking consequences: RDMA device visibility in VMs (VFIO direct vs virtio-net), GPUDirect with passthrough (peer memory, DMA-BUF), SR-IOV VF assignment in libvirt and KubeVirt, IOMMU and DMA-remapping impact on GPU peer-to-peer; why vGPU abstractions break GPUDirect
+- Decision matrix: bare-metal vs passthrough vs MIG vs MPS vs KubeVirt — by workload type, isolation requirement, and RDMA/GPUDirect need
+- *Lab: Proxmox VM with GPU passthrough (`qm set`, OVMF) + KubeVirt VMI with SR-IOV secondary NIC; verify RDMA device visibility inside the VM with `ibv_devinfo`*
+
 ### Chapter 26 — Network Security & Zero-Trust for AI Fabrics (20 pp)
 - Threat model: lateral movement, NIC firmware exposure, management plane attack surface
 - Cilium transparent encryption: WireGuard and IPsec modes, key rotation, `cilium encrypt status`
@@ -178,6 +201,16 @@ Wiring GPU pods into the fabric through container networking and overlay protoco
 - HashiCorp Vault PKI: NIC credentials, management API keys, `hvac` Python client
 - Cilium `CiliumNetworkPolicy`: identity-based policy, audit mode, Hubble visualization
 - *Lab: WireGuard encrypted namespace tunnel + Cilium transparent encryption on Kind*
+
+### Chapter 32 — Extending Kubernetes for AI Infrastructure: CNI, Device Plugins, Operators & Gateway API (25 pp)
+- Kubernetes extension points map: CNI (network), CRI (runtime), CSI (storage), Device Plugin API (hardware), Operators (control plane), Gateway API (ingress/routing) — one-page orientation; which layers this book owns
+- **CNI spec** in depth: `cmdAdd`/`cmdDel`/`cmdCheck` lifecycle, result JSON schema, IPAM delegation, chaining via `conflist`; how Multus (Ch13) and Cilium (Ch12) implement the spec; writing a minimal CNI plugin in Go using `github.com/containernetworking/cni`
+- **Device Plugin API** (`k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1`): `ListAndWatch`, `Allocate`, `PreStartContainer` RPCs; how `nvidia-device-plugin` exposes `nvidia.com/gpu`; how `rdma-shared-device-plugin` exposes `rdma/hca` resources (cross-ref Ch13); writing a stub device plugin with `kubelet` health checking
+- **Operator SDK / controller-runtime**: reconcile loop, `client.Client`, `scheme` registration, `controller-gen` marker annotations for CRD generation; watch predicates and rate limiting; writing a `NetworkTopology` CRD operator that maintains rack-to-node affinity annotations consumed by the scheduler (cross-ref Ch29)
+- **Gateway API** (`gateway.networking.k8s.io`): resource model — `GatewayClass`, `Gateway`, `HTTPRoute`, `TCPRoute`, `GRPCRoute`; Cilium Gateway API implementation (cross-ref Ch12); `ReferenceGrant` for cross-namespace routing; relevance to AI inference serving endpoints (disaggregated prefill/decode, cross-ref Ch29 Dynamo)
+- CRI and CSI orientation (brief): `RuntimeClass` for GPU workloads, `containerd` shim v2 API; CSI `NodeStageVolume`/`NodePublishVolume` — how checkpoint I/O paths attach storage (cross-ref Ch6, Ch18)
+- Putting it together: a custom `RDMANetwork` operator that provisions SR-IOV VFs, creates `NetworkAttachmentDefinitions`, and updates device plugin config — end-to-end controller walkthrough
+- *Lab: implement a minimal CNI plugin (Go) + stub device plugin; deploy via Operator SDK scaffolding on Kind; expose a service via Cilium Gateway API `HTTPRoute`*
 
 ### Chapter 29 — Kubernetes AI Scheduling: Volcano, Kueue & Topology Awareness (20 pp)
 - Gang scheduling requirement: all-or-nothing semantics, starvation and deadlock risks
@@ -252,6 +285,19 @@ The storage fabric and the collective/training runtime interfaces, treated brief
 - Ray cluster networking: GCS, worker-to-worker object transfer, object store pinning
 - What each parallelism strategy implies for fabric design: rail-optimized vs full-bisection
 
+### Chapter 33 — AI Inference Serving Fabric (15 pp)
+- Inference vs. training traffic taxonomy: request-response vs. all-reduce, latency-bound vs. throughput-bound, bursty fan-out vs. sustained collective
+- Prefill and decode phases: compute and bandwidth profiles per phase; why separating them onto different hardware reduces queuing
+- **Disaggregated prefill/decode** architecture: prefill nodes (compute-bound, high FLOP/byte) vs. decode nodes (memory-bandwidth-bound); KV cache transfer as the binding network operation
+- KV cache RDMA transfer: P2P GPU memory copy via **GPUDirect**, DMA-BUF, NVLink vs. RoCEv2 KV migration; latency budget and impact on time-to-first-token (TTFT)
+- Tensor parallelism for inference: all-reduce within a node (NVLink), all-reduce across nodes (RoCEv2); sequence parallelism and its all-gather/reduce-scatter pattern
+- Speculative decoding communication: draft-model / verifier-model coordination, small-message latency sensitivity
+- **NVIDIA Dynamo** network architecture: KV cache transfer protocol, **Grove** topology-aware worker placement, prefill/decode routing (cross-ref Ch29); NIC and fabric requirements
+- Serving framework network requirements: **vLLM** distributed executor, **TensorRT-LLM** executor, **SGLang** radix cache and P2P sharing; **Triton Inference Server** gRPC/HTTP endpoint sizing, dynamic batching effects on NIC utilisation
+- Load balancing inference endpoints: request routing strategies, consistent hashing for KV cache locality, power-of-two-choices for decode node selection, Gateway API `GRPCRoute` integration (cross-ref Ch32)
+- Fabric design implications: spine-leaf sizing for inference, latency budget allocation across network hops, storage network for model weight loading
+- *Lab: two-process disaggregated inference simulation — prefill process sends KV cache to decode process via soft-RoCE; measure TTFT vs. KV transfer latency*
+
 ---
 
 ## Part VII — Testing, Emulation, Simulation & Resilience (~65 pp)
@@ -317,6 +363,24 @@ Alphabetical definitions of all key terms: AF_XDP, AllReduce, BFD, DCQCN, DPU, E
 **Appendix G — RDMA & NCCL Troubleshooting Cookbook (10 pp)**  
 Runbook-style diagnostics for: RDMA bandwidth below expected, link errors and retransmissions, NCCL AllReduce hang, bandwidth collapse under incast, BGP session flapping, PFC deadlock, Containerlab convergence failures, gNMI subscribe returning no data.
 
+**Appendix H — Bash & SR Linux CLI Reference (8 pp)**  
+Two-part practitioner cheat sheet:
+- *Linux/Bash utilities* grouped by purpose: network inspection (`ip`, `ss`, `ethtool`, `tc`, `tcpdump`, `tshark`), hardware enumeration (`lspci`, `numactl`, `lstopo`), RDMA/IB tools (`ibstat`, `ibdev2netdev`, `rdma`, `mlxconfig`, `perfquery`), GPU management (`nvidia-smi`, `nvitop`), process & perf (`perf`, `strace`, `lsof`, `dmesg`), data wrangling (`jq`, `yq`, `awk`, `sed`), remote & session (`ssh`, `rsync`, `tmux`, `watch`, `parallel`). Each entry: one-line description + canonical usage example.
+- *SR Linux CLI*: mode-based navigation (candidate/running/state), `enter candidate`, `info`, `diff`, `commit now`, `discard`, `tools`, `show` aliases, and the key operational commands used in the book's labs. Covers both the interactive CLI and `gnmic`-style one-shot execution.
+
+**Appendix J — AI Cluster Network Reference Architectures (10 pp)**
+End-to-end network designs for three cluster sizes — each with topology diagram, port budget, oversubscription ratios, and management plane layout:
+- *64-GPU cluster (single rack)*: dual-port 200GbE NIC, single ToR switch, no spine, flat L2 fabric; storage converged on RoCEv2; 1GbE OOB for BMC/IPMI
+- *512-GPU cluster (4 racks)*: 2-tier leaf-spine, rail-optimised fabric (one NIC per rail), dedicated 400GbE spine plane; separate storage fabric (NVMe-oF); in-band management VRF + OOB 10GbE management network; BGP-EVPN overlay
+- *4096-GPU cluster (32+ racks)*: 3-tier fat-tree or dragonfly+, multiple spine planes for non-blocking bisection; dedicated InfiniBand storage fabric vs. converged RoCEv2 decision matrix; OOB management network topology; PTP grandmaster placement
+- Management plane topology: OOB network design (BMC/Redfish access), in-band management VRF separation, jump host / bastion pattern
+- Cable and fibre planning: DAC vs. AOC vs. SR8/DR8 reach requirements per tier, MPO trunk routing
+- Cross-reference to Appendix E (hardware selection) and Appendix A (Containerlab lab topologies)
+
+**Appendix I — Kubernetes SIGs & CNCF Project Landscape (8 pp)**  
+Curated reference scoped to AI cluster infrastructure — not exhaustive:
+- *Kubernetes SIGs*: ~10 directly relevant SIGs (sig-network, sig-node, sig-scheduling, sig-storage, sig-instrumentation, sig-auth, sig-multicluster, sig-cluster-lifecycle, wg-device-management, wg-serving) — one-paragraph description, key deliverables, repo/docs links
+- *CNCF projects*: table of projects that appear in the book, grouped by layer — Networking (Cilium, Multus, SR-IOV Network Operator, Submariner, CNI plugins), Observability (Prometheus, Grafana, OpenTelemetry, Jaeger, Thanos), Storage (Rook/Ceph, Longhorn), Security (SPIFFE/SPIRE, Falco, OPA/Gatekeeper), Scheduling & Runtimes (Volcano, Kueue, KubeVirt, Argo Workflows, containerd), Service Mesh & Ingress (Envoy, Contour, Gateway API). Each entry: graduation status (Sandbox/Incubating/Graduated), one-line description, project URL.
 
 ---
 

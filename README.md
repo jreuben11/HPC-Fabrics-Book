@@ -18,6 +18,7 @@ Every layer is treated as software: version-controlled, CI-tested, observable, a
 |---|---------|--------|
 | 1 | [Architecture of the AI Cluster Network](ch01-ai-cluster-architecture.md) | Fat-tree & rail-optimized topologies, traffic patterns, ECMP |
 | 2 | [RDMA & the RoCEv2 Stack](ch02-rdma-rocev2-stack.md) | Verbs API, QPs/CQs/MRs, DCQCN, perftest |
+| 34 | [Congestion Control & the Ultra Ethernet Consortium](ch34-congestion-control-uec.md) | DCQCN deep dive, Swift/HPCC/TIMELY, UEC transport, lossless vs lossy |
 | 3 | [Precision Time Protocol](ch03-precision-time-protocol.md) | IEEE 1588v2, linuxptp, ptp4l/phc2sys |
 | 4 | [UCX, LibFabric & PMIx](ch04-ucx-libfabric-pmix.md) | Transport abstraction, provider model, PMIx wire-up, CXL |
 | 24 | [InfiniBand Fabric Management](ch24-infiniband-fabric-management.md) | OpenSM, ibnetdiscover, fat-tree routing, PFC lossless |
@@ -48,6 +49,8 @@ Every layer is treated as software: version-controlled, CI-tested, observable, a
 | 11 | [Overlay Networks: BGP-EVPN, VXLAN, OVS & OVN](ch11-overlay-networks-evpn-vxlan.md) | VXLAN encap, EVPN route types, OVS OpenFlow pipeline, OVN |
 | 12 | [eBPF-Native Kubernetes: Cilium](ch12-cilium-ebpf-kubernetes.md) | CNI model, kube-proxy replacement, network policy, Hubble, BGP |
 | 13 | [Multi-NIC GPU Pods: Multus, SR-IOV & Network Operator](ch13-multus-sriov-network-operator.md) | NetworkAttachmentDefinition, VF provisioning, RDMA in pods |
+| 31 | [GPU Virtualization & Isolation: VFIO, MIG, MPS & KubeVirt](ch31-gpu-virtualization-isolation.md) | VFIO passthrough, KVM/QEMU, Proxmox, libvirt, MIG, MPS, KubeVirt, GPUDirect in VMs |
+| 32 | [Extending Kubernetes for AI Infrastructure](ch32-kubernetes-extension-apis.md) | CNI spec, Device Plugin API, Operator SDK, Gateway API, CRI/CSI orientation |
 | 26 | [Network Security & Zero-Trust](ch26-network-security-zero-trust.md) | WireGuard, IPsec/strongSwan, SPIFFE/SPIRE, Vault PKI, Cilium encryption |
 | 29 | [Kubernetes AI Scheduling](ch29-kubernetes-ai-scheduling.md) | Volcano, Kueue, Coscheduler, SLURM, RunAI, NVIDIA Dynamo/Grove |
 
@@ -67,6 +70,7 @@ Every layer is treated as software: version-controlled, CI-tested, observable, a
 | 18 | [Distributed Storage for AI Clusters](ch18-distributed-storage.md) | Ceph, Lustre, DAOS, WEKA, MinIO; storage network isolation |
 | 19 | [GPU Collective Communications: Network Interface](ch19-gpu-collective-comms-network-interface.md) | NCCL fabric demands, SHARP in-network aggregation, topology file *(brief)* |
 | 20 | [Distributed Training Runtimes: Fabric Demands](ch20-distributed-training-fabric-demands.md) | DDP/FSDP, ZeRO stages, Ray networking, parallelism traffic patterns *(brief)* |
+| 33 | [AI Inference Serving Fabric](ch33-inference-serving-fabric.md) | Disaggregated prefill/decode, KV cache RDMA, vLLM/TRT-LLM/Dynamo networking |
 
 ### Part VII — Testing, Emulation, Simulation & Resilience
 
@@ -88,6 +92,9 @@ Every layer is treated as software: version-controlled, CI-tested, observable, a
 | E | [Hardware Selection Guide](appendix-e-hardware-selection.md) | NIC/switch/ASIC comparison, cable & optics, cost tables by cluster size |
 | F | [Glossary](appendix-f-glossary.md) | 80+ term definitions (AF_XDP through ZeRO) |
 | G | [RDMA & NCCL Troubleshooting Cookbook](appendix-g-troubleshooting-cookbook.md) | Runbook diagnostics for common failure modes |
+| H | [Bash & SR Linux CLI Reference](appendix-h-bash-srlinux-cli.md) | Linux/network utility one-liners, SR Linux mode-based CLI |
+| I | [Kubernetes SIGs & CNCF Project Landscape](appendix-i-k8s-sigs-cncf.md) | Curated SIG and CNCF project reference for AI infrastructure |
+| J | [AI Cluster Network Reference Architectures](appendix-j-reference-architectures.md) | 64/512/4096-GPU network designs, cabling, management plane topology |
 
 ---
 

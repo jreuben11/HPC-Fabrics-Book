@@ -10,13 +10,12 @@ See [README.md](README.md) for the reader-facing table of contents with links to
 ---
 
 # TODO
-- plan a virtualization config chapter: vGPUs and GPU passthrough, KVM, Qemu, OpenNebula, UTM, Lima, Multipass, LibVirt, virsh, kubevirt, proxmox (go deep here), OpenShift, OpenStack, beowulf, pacemaker, MIG, MPS
-- plan a K8s programming chapter: Operator SDK https://operatorframework.io/, CNI https://www.cni.dev/docs/ , CSI https://github.com/container-storage-interface/spec/blob/master/spec.md, CRI https://kubernetes.io/docs/concepts/containers/cri/, gatway API https://gateway-api.sigs.k8s.io/ 
-- plan an appendix of useful bash utils with common usage examples. also SR Linux CLI https://learn.srlinux.dev/get-started/cli/
-- analyze book-outline.md - are we missing anything else ?
-- plan an appendix of all K8s sigs https://github.com/kubernetes-sigs 
+- ~~plan a virtualization config chapter~~ → **DONE: Chapter 31** — GPU Virtualization & Isolation: VFIO, MIG, MPS & KubeVirt (25 pp); see book-outline.md Part IV
+- ~~plan a K8s programming chapter~~ → **DONE: Chapter 32** — Extending Kubernetes for AI Infrastructure: CNI, Device Plugins, Operators & Gateway API (25 pp); see book-outline.md Part IV
+- ~~plan an appendix of useful bash utils~~ → **DONE: Appendix H** — Bash & SR Linux CLI Reference (8 pp); see book-outline.md
+- ~~analyze book-outline.md~~ → **DONE**: added Ch33 (Inference Serving Fabric), Ch34 (Congestion Control & UEC), Appendix J (Reference Architectures); expansions planned for Ch7 (nftables), Ch21 (OOB mgmt + local cluster comparison), Ch26 (MACsec)
+- ~~plan an appendix of all K8s sigs~~ → **DONE: Appendix I** — Kubernetes SIGs & CNCF Project Landscape (8 pp); see book-outline.md
 - look at reference-map.md and suggest optimal stack (consider features, dev community size and development velocity) for each purpose and integrations between different stacks
-- put a plan together for making these changes and save it in book-plan.md
 ---
 
 # To Investigate:

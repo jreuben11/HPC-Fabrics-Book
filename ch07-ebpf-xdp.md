@@ -379,6 +379,118 @@ Key design: the XDP program does a hash lookup of the destination VIP in a BPF m
 
 ---
 
+## 7.10 netfilter, iptables, nftables & bpfilter: The Packet Filter Stack
+
+Before eBPF rewrote the rules, every packet entering or leaving a Linux host passed through **netfilter** — the kernel framework that has anchored Linux firewalling since kernel 2.4. Understanding netfilter and its tooling clarifies why Cilium's eBPF-native data plane (Chapter 12) is architecturally necessary at AI cluster scale, and where the legacy stack still appears even in eBPF-first deployments.
+
+### netfilter and its Hook Points
+
+**netfilter** defines five hook points at which kernel subsystems can register callback functions to inspect or modify packets in flight:
+
+| Hook | Traffic type |
+|---|---|
+| `NF_INET_PRE_ROUTING` | All inbound packets, before routing decision |
+| `NF_INET_LOCAL_IN` | Packets destined for a local socket |
+| `NF_INET_FORWARD` | Packets being forwarded between interfaces |
+| `NF_INET_LOCAL_OUT` | Locally generated outbound packets |
+| `NF_INET_POST_ROUTING` | All outbound packets, after routing decision |
+
+Both **iptables** and **nftables** are implemented as netfilter hook registrations; they share the same five attachment points. **conntrack** (connection tracking) is also a netfilter subsystem, maintaining per-flow state that DNAT/SNAT and stateful firewall rules depend on.
+
+### iptables: The Classic Tool and Its Limits
+
+**iptables** organises rules into *tables* (`filter`, `nat`, `mangle`, `raw`) each containing built-in *chains* (PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING) and user-defined chains. A packet traverses each chain's rule list sequentially until a terminating target (`ACCEPT`, `DROP`, `DNAT`, …) is hit.
+
+```bash
+# List all rules with line numbers and packet/byte counters
+sudo iptables -L -n -v --line-numbers
+
+# Add a rule to drop all traffic from an IP
+sudo iptables -I INPUT -s 192.0.2.1 -j DROP
+
+# Save the current ruleset (iptables-nft backend on Ubuntu 24.04)
+sudo iptables-save > /etc/iptables/rules.v4
+```
+
+The scalability problems are structural:
+
+- **O(n) linear scan** — every packet walks the entire chain until a match; 10,000 DNAT rules means 10,000 comparisons in the worst case.
+- **Per-packet `xt_*` module overhead** — each match extension (`xt_multiport`, `xt_conntrack`, …) is called as a function pointer per rule per packet.
+- **Non-atomic ruleset updates** — `iptables-restore` replaces the full ruleset in a single `setsockopt`, causing a brief window where the kernel holds no rules.
+- **conntrack table pressure** — every new Service endpoint in Kubernetes adds DNAT entries; conntrack can become a bottleneck under high connection rates.
+
+On Ubuntu 24.04, `/usr/sbin/iptables` is `iptables-nft` — it uses the nftables kernel API under the hood, not the legacy `xt_*` path. The older `iptables-legacy` binary (using `xt_*` directly) is still available but non-default. **The critical rule:** never mix `iptables-legacy` and `nft`/`iptables-nft` on the same host — they write to separate kernel hook chains and will produce inconsistent state.
+
+```bash
+# Audit which backend is active
+sudo update-alternatives --query iptables
+# On Ubuntu 24.04: /usr/sbin/iptables -> /usr/sbin/iptables-nft
+
+# View legacy xt_* rules (if any were written by older tooling)
+sudo iptables-legacy-save
+
+# View the nftables ruleset (covers iptables-nft and native nft rules)
+sudo nft list ruleset
+```
+
+### nftables: The Modern Replacement
+
+**nftables** (kernel 3.13+, CLI: `nft`) replaces iptables with a redesigned rule engine:
+
+- **Set-based matching** — IP sets, port ranges, and connection states are stored as kernel hash tables or bitmaps, giving O(log n) or O(1) lookup instead of linear scans.
+- **Compiled bytecode VM** — rules are compiled to a compact bytecode representation at load time, eliminating the per-rule function-pointer calls that `xt_*` modules require.
+- **Atomic ruleset replacement** — `nft -f ruleset.nft` applies an entire ruleset as a single atomic transaction; there is no partial-state window.
+
+```bash
+# List the full active ruleset (equivalent of iptables -L for all tables)
+sudo nft list ruleset
+
+# Apply a complete ruleset file atomically
+sudo nft -f /etc/nftables.conf
+
+# Create a simple host firewall — accept established, drop new inbound
+sudo nft add table inet filter
+sudo nft add chain inet filter input '{ type filter hook input priority 0; policy drop; }'
+sudo nft add rule inet filter input ct state established,related accept
+sudo nft add rule inet filter input iif lo accept
+```
+
+kube-proxy gained an nftables backend (KEP-3866, GA in Kubernetes 1.33) that uses nftables sets for Service routing, reducing per-packet work compared to the iptables backend. For new clusters not yet migrated to Cilium, the nftables kube-proxy mode is the recommended intermediate step.
+
+### bpfilter: An Abandoned Translation Layer
+
+**bpfilter** was an experimental kernel subsystem (introduced in 4.18) designed to translate iptables rules into BPF bytecode in-kernel via a user-mode helper process. The premise was appealing — keep the familiar `iptables` CLI while gaining BPF's performance — but the implementation stalled: no production user ever shipped it, the user-mode helper design proved fragile, and active development ceased.
+
+**bpfilter was removed from the kernel tree in Linux 6.8** (the same version Ubuntu 24.04 ships). The project continues as a standalone user-space library at `github.com/facebook/bpfilter`, but it is not production-ready and is not a recommended deployment path. The lesson bpfilter's failure teaches is the same lesson Cilium's success confirms: translating legacy rule models into BPF is the wrong abstraction. A purpose-built eBPF data plane that replaces the rule model entirely — rather than emulating it — is what delivers the performance gains.
+
+### How Cilium Replaces kube-proxy
+
+Cilium (Chapter 12) eliminates iptables DNAT chains for Kubernetes Service load balancing entirely, replacing them with BPF maps looked up in the TC hook (see §7.7). The data structures are:
+
+- **`cilium_lb4_services_v2`** — maps a Service VIP + port to a service entry including backend count and load-balancing algorithm.
+- **`cilium_lb4_backends_v3`** — maps a backend ID to the real pod IP and port.
+
+A packet destined for a ClusterIP hits the TC ingress hook, which does a single hash map lookup in `cilium_lb4_services_v2` (O(1)), selects a backend from `cilium_lb4_backends_v3` (O(1)), and rewrites the destination in place — no conntrack entry required in **DSR** (**Direct Server Return**) mode. Compare this to kube-proxy's iptables chain: with 500 Services each with 20 endpoints, kube-proxy generates roughly 10,000 DNAT rules traversed linearly. At 10,000+ Service endpoints — the scale of an AI cluster's microservice mesh — the difference between O(1) map lookup and O(n) rule traversal is the difference between microseconds and milliseconds of added latency per packet.
+
+### Comparison
+
+| Criterion | iptables (legacy) | nftables / kube-proxy nft | eBPF / Cilium |
+|---|---|---|---|
+| Rule lookup complexity | O(n) linear | O(log n) / O(1) with sets | O(1) hash map |
+| Atomic ruleset updates | No (full reload) | Yes (`nft -f`) | Yes (map update) |
+| Kubernetes Service LB | Yes (DNAT chains) | Yes (1.33+ kube-proxy nft) | Yes — replaces kube-proxy |
+| conntrack dependency | Required | Required | Optional (DSR mode) |
+| Maintenance status | Legacy / no new features | Active (kernel + kube-proxy) | Active (Cilium 1.x) |
+
+### Guidance
+
+- Use **nftables** (`nft`) for any new host firewall rules; avoid `iptables-legacy` entirely on modern kernels.
+- Use **Cilium**'s eBPF data plane for all Kubernetes Service routing and NetworkPolicy; it eliminates the iptables/conntrack bottleneck at the source.
+- If running kube-proxy, prefer `--proxy-mode=nftables` on kernel ≥ 5.13 as an intermediate step before full Cilium adoption.
+- Audit the current state with `sudo nft list ruleset` (nftables + iptables-nft rules) and `sudo iptables-legacy-save` (legacy xt_* rules) — both commands should be checked when diagnosing firewall conflicts.
+
+---
+
 ## Lab Walkthrough 7 — XDP Packet Counter to Load Balancer
 
 This walkthrough builds an XDP-based packet processing pipeline in five stages, each adding capability on top of the previous one. You will write real C source files, compile them, attach them to a local test interface, and verify behavior at each step using `bpftool` and standard Linux networking tools. All steps run on a single Ubuntu 24.04 host — no extra hardware required.

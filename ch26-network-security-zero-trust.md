@@ -861,6 +861,169 @@ cilium hubble observe \
 
 ---
 
+## 26.9 MACsec: Layer 2 Link Encryption
+
+All of the encryption mechanisms discussed so far — **WireGuard** (§26.4), **IPsec** with **strongSwan** (§26.5), and Cilium transparent encryption (§26.3) — operate at Layer 3 or above. They protect IP packets after they have been assembled in the host kernel. **MACsec** (**IEEE 802.1AE**) takes a fundamentally different approach: it encrypts and authenticates Ethernet frames at Layer 2, before they are placed on the wire, entirely below the IP layer. This makes MACsec transparent to every L3+ protocol — TCP, UDP, BGP, and critically **RoCEv2** and **RDMA** — because the encryption and decryption happen at the link layer before any L3 processing occurs.
+
+IEEE 802.1AE defines a frame format that wraps the original Ethernet payload in a **SecTAG** (Security Tag) and appends an **ICV** (Integrity Check Value). The cipher suite is GCM-AES-128 or GCM-AES-256. Each protected Ethernet frame carries a 64-bit **SCI** (Secure Channel Identifier) that identifies the transmitter and a packet number that prevents replay attacks. Because the header additions total approximately 32 bytes on top of the original Ethernet frame, MACsec has a small but measurable impact on MTU and effective throughput at very small packet sizes.
+
+### Why MACsec Matters for AI Clusters
+
+The spine-leaf fabric in a large GPU cluster contains hundreds of patch-panel interconnects, fibre runs, and ToR uplinks — each a potential site for a physical tap. An attacker who clips a fibre tap onto an unencrypted 400GbE spine link captures raw gradient tensors from NCCL AllReduce collectives with no decryption effort required. MACsec closes this physical-interception vector by encrypting every frame on the link before it leaves the NIC or switch port.
+
+Compared with IPsec, MACsec adds no per-packet IP-header processing: it operates on Ethernet frames and therefore imposes no additional overhead on protocols that already bypass the kernel IP stack. With hardware offload (see below), MACsec encryption and decryption are performed entirely in the NIC ASIC and are invisible to the CPU and to the RDMA subsystem. This means that **hardware-offloaded MACsec is fully compatible with RoCEv2**: the RDMA verbs engine posts work requests to the NIC, the NIC DMA-reads the payload from GPU memory, encrypts the frame in-hardware, and places the protected Ethernet frame on the wire — all without involving the host kernel IP stack. Software MACsec, by contrast, processes frames in the kernel `macsec` driver and therefore does not intercept RDMA traffic that bypasses the kernel entirely *(see §26.1 on RDMA bypassing kernel hooks)*. For RoCEv2 protection, hardware offload is required.
+
+MACsec addresses two rows from the threat matrix *(see §26.1)* directly: physical interception on spine-leaf and ToR links, and rogue-device injection of forged Ethernet frames onto a shared fabric VLAN. It does not protect against a compromised host that holds valid MACsec keys, misconfigured ACLs, API token leakage, or NIC firmware exploits.
+
+### MACsec Key Agreement (MKA)
+
+Static pre-shared keys are operationally fragile in a fabric with hundreds of links. **MACsec Key Agreement** (**MKA**), defined in IEEE 802.1X-2010, provides automated key distribution. The core concepts:
+
+- **CAK** (Connectivity Association Key): the long-lived pre-shared secret seeding the key hierarchy, identified by the 32-byte **CKN** (CAK Name)
+- **SAK** (Secure Association Key): the short-lived per-session encryption key derived from the CAK by the **KaY** (Key Agreement Entity) and distributed to both ends of the link
+- **Secure Channel**: a unidirectional encrypted channel identified by an SCI; each link has two channels (one per direction)
+
+The **KaY** entity runs inside `wpa_supplicant` on Linux. It performs the MKA handshake over EAPOL frames, derives the SAK, and programs the SAK and SCI into the kernel `macsec` driver or the NIC hardware automatically.
+
+### Linux MACsec: Manual Static-Key Configuration
+
+For lab or point-to-point scenarios where MKA infrastructure is unavailable, Linux supports static keys configured directly via `iproute2`:
+
+```bash
+# Install iproute2 (ships with Ubuntu 24.04; macsec support requires kernel >= 4.6)
+sudo modinfo macsec | grep -E "^(filename|version)"
+# Expected: filename: /lib/modules/6.8.0-xx-generic/.../macsec.ko.zst
+
+# --- On node A (eth0 has IP 192.168.1.1) ---
+
+# 1. Create the MACsec interface linked to the physical NIC
+#    sci: 64-bit Secure Channel Identifier (hex, 16 digits)
+#    encrypt on: enable confidentiality (not integrity-only)
+sudo ip link add link eth0 macsec0 type macsec \
+    sci 1122334455667788 encrypt on
+
+# 2. Add a transmit Security Association (SA 0, starting packet number 1)
+#    key id: 2-byte hex identifier; key: 128-bit AES key (32 hex digits)
+sudo ip macsec add macsec0 tx sa 0 pn 1 on \
+    key 01 0123456789ABCDEF0123456789ABCDEF
+
+# 3. Add the receive channel for node B (identified by node B's SCI)
+sudo ip macsec add macsec0 rx sci AABBCCDDEEFF1122 on
+
+# 4. Add a receive SA for node B's transmissions
+sudo ip macsec add macsec0 rx sci AABBCCDDEEFF1122 sa 0 pn 1 on \
+    key 02 FEDCBA9876543210FEDCBA9876543210
+
+# 5. Assign an IP address to the MACsec interface and bring it up
+sudo ip addr add 10.100.0.1/24 dev macsec0
+sudo ip link set macsec0 up
+
+# Verify configuration
+sudo ip macsec show
+# Expected output:
+# macsec0: protect on, validate strict, sc off, sa off, encrypt on, send_sci on, end_station off, scb off, replay off
+#   cipher suite: GCM-AES-128, using ICV length 16
+#   TXSC: 1122334455667788 on SA 0
+#       0: PN 1, state on, key 01
+#   RXSC: aabbccddeeff1122, state on
+#       0: PN 1, state on, key 02
+```
+
+### MKA Automatic Key Distribution with wpa\_supplicant
+
+For production, `wpa_supplicant` runs MKA and handles key derivation and rotation automatically. Install it with `sudo apt install wpasupplicant`. A minimal configuration for a direct point-to-point link:
+
+```text
+# /etc/wpa_supplicant/macsec-eth0.conf
+ctrl_interface=/var/run/wpa_supplicant
+eapol_version=3
+ap_scan=0
+fast_reauth=1
+
+network={
+    key_mgmt=NONE
+    eapol_flags=0
+    macsec_policy=1
+    mka_cak=0123456789ABCDEF0123456789ABCDEF
+    mka_ckn=6162636465666768696A6B6C6D6E6F707172737475767778797A303132333435
+    mka_priority=2
+    macsec_integ_only=0
+    macsec_replay_protect=1
+    macsec_replay_window=32
+}
+```
+
+```bash
+# Start MKA on eth0 — wpa_supplicant will automatically create macsec0
+# and program the derived SAK into the kernel
+sudo wpa_supplicant -i eth0 -Dmacsec_linux -c /etc/wpa_supplicant/macsec-eth0.conf -B
+
+# After successful MKA handshake, macsec0 appears automatically
+ip link show macsec0
+# Expected: macsec0: ... state UNKNOWN ... link/ether ...
+
+ip macsec show
+# Expected: shows active TXSC/RXSC with automatically derived SAKs
+```
+
+### Hardware Offload on NVIDIA ConnectX-7
+
+Software MACsec processes frames in the Linux kernel `macsec` driver. Because the kernel's AES-GCM implementation is CPU-bound and single-threaded per flow, software MACsec throughput typically reaches 7–10 Gbps on a modern server core — adequate for management links but far short of the 200/400GbE speeds used on AI cluster spine links.
+
+**NVIDIA ConnectX-7** (and later) NICs support MACsec full offload: the GCM-AES encryption, SecTAG insertion, ICV generation, anti-replay check, and decapsulation are all performed in the NIC ASIC at line rate. This requires `CONFIG_MLX5_EN_MACSEC=y` in the kernel and MLNX_OFED firmware support.
+
+```bash
+# Create a MACsec interface with MAC-layer hardware offload
+# (offload mac instructs the kernel to delegate crypto to the NIC)
+sudo ip link add link eth0 macsec0 type macsec \
+    sci 1122334455667788 encrypt on offload mac
+
+# Enable the offload explicitly on an existing macsec interface
+sudo ip macsec offload macsec0 mac
+
+# Verify that traffic is being offloaded (hardware counters increment)
+ethtool -S eth0 | grep macsec
+# Expected (hardware processing frames, not software):
+# macsec_tx_pkts: 142857
+# macsec_tx_bytes: 183500000
+# macsec_rx_pkts: 141203
+# macsec_rx_bytes: 181339000
+
+# Confirm offload capability reported by ethtool
+ethtool -k eth0 | grep macsec
+# Expected:
+# macsec-hw-offload: on
+```
+
+With hardware offload active on ConnectX-7, MACsec operates at wire-rate 400GbE. Because the encryption occurs below the PCIe boundary in the NIC ASIC, RDMA DMA operations targeting the NIC's send queues are encrypted transparently: the NIC encrypts the frame after reading it from GPU memory via DMA, before placing it on the wire. This is the only configuration in which MACsec protects RoCEv2 traffic.
+
+### Limitations
+
+MACsec as defined in IEEE 802.1AE is inherently **point-to-point**: a Secure Channel connects exactly two endpoints. Deploying MACsec on a full spine-leaf fabric therefore requires a separate Secure Channel — and a separate CAK/SAK pair — for every physical link. Without an 802.1X infrastructure (a RADIUS server distributing CAKs to switch ports and NICs), operational complexity scales with the number of links.
+
+A second architectural limitation arises when MACsec is combined with VXLAN overlays. VXLAN encapsulation runs in the kernel and produces new Ethernet frames that MACsec has never seen. If MACsec is applied to the physical interface before VXLAN encapsulation, the VXLAN outer Ethernet frame is not encrypted. MACsec must be applied per-link on the physical NIC after encapsulation completes, which requires careful ordering of network interface setup.
+
+Finally, as of mid-2025 there is no widely adopted Kubernetes operator or CNI plugin that configures MACsec automatically the way Cilium configures WireGuard or IPsec. MACsec link configuration must be applied as node-level provisioning (via Ansible, cloud-init, or a DaemonSet that runs privileged `ip` commands), outside the Kubernetes control plane.
+
+### MACsec vs IPsec vs WireGuard Comparison
+
+| Property | MACsec (802.1AE) | IPsec (ESP/IKEv2) | WireGuard |
+|---|---|---|---|
+| OSI layer | L2 (Ethernet frame) | L3 (IP packet) | L3 (IP packet, UDP tunnel) |
+| Encryption scope | Link-by-link, hop-by-hop | End-to-end tunnel or transport | End-to-end tunnel |
+| Key exchange | MKA / 802.1X (EAPOL) | IKEv2 (certificates or PSK) | Static keys (out-of-band) |
+| RoCEv2/RDMA compatible | HW offload only | No (kernel bypass) | No (kernel bypass) |
+| Performance at 400GbE | Wire-rate with HW offload | Wire-rate with HW offload | Software-only (~50–100Gbps/core) |
+| Software throughput | ~7–10 Gbps per core | ~5–10 Gbps per core | ~10–20 Gbps per core |
+| Deployment granularity | Per physical link | Per host-pair or gateway | Per host-pair or overlay |
+| Kubernetes integration | None (DaemonSet provisioning) | Cilium IPsec mode (§26.3) | Cilium WireGuard mode (§26.3) |
+| Standards track | IEEE 802.1AE-2018 | RFC 4303, RFC 7296 | IETF draft (de facto standard) |
+| Attack vector closed | Physical tap, rogue L2 device | Network-layer eavesdropping | Network-layer eavesdropping |
+
+The key differentiator is the OSI layer at which encryption is applied. IPsec and WireGuard protect IP traffic between hosts after it has been assembled by the kernel — they cannot protect RDMA traffic that bypasses the kernel. MACsec protects Ethernet frames at the NIC, but only when hardware offload is in use and only on the specific physical links that have been configured. For a complete AI cluster security posture, MACsec on spine-leaf links (protecting against physical interception) is complementary to Cilium WireGuard or IPsec (protecting against compromised-host lateral movement) *(see §26.2)*.
+
+---
+
 ## Lab Walkthrough 26 — WireGuard Encrypted Overlay + Cilium Transparent Encryption
 
 This lab builds a complete zero-trust encrypted overlay in two phases: first a manual WireGuard tunnel between network namespaces on a single host (to understand the primitives), then Cilium transparent encryption on a Kind cluster (to see how it scales to a full cluster).

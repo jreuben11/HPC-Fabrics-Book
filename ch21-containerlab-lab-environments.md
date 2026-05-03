@@ -416,6 +416,207 @@ topology:
 
 ---
 
+## 21.9 Out-of-Band Management Networks
+
+Production GPU clusters require a second, physically separate network whose sole purpose is to reach nodes even when the main data-plane fabric is broken, misconfigured, or powered off. That network is the **out-of-band (OOB) management network**. The ability to power-cycle a hung server, reflash a corrupt NOS image, or read console output from a kernel-panicking node — without touching the production fabric — is not a luxury; it is a prerequisite for operating any cluster at scale.
+
+### Baseboard Management Controllers
+
+Every modern server motherboard carries a **BMC** (Baseboard Management Controller): a dedicated microcontroller with its own processor, RAM, and 1GbE Ethernet port that runs independently of the host CPU and OS. The BMC remains powered as long as the server has AC mains connected, even when the host is powered off.
+
+Vendor names differ but the function is identical:
+
+- **iDRAC** (Integrated Dell Remote Access Controller) — Dell PowerEdge servers
+- **iLO** (Integrated Lights-Out) — HPE ProLiant servers
+- **AMI MegaRAC** — the OEM firmware used by many whitebox and ODM vendors (Supermicro, ASRock Rack, Gigabyte)
+- **OpenBMC** — the open-source BMC stack used by Meta, Google, and increasingly by ODM partners
+
+From the OOB network a BMC can: toggle host power on/off/reset; present a serial console via Serial-over-LAN (**SoL**); provide KVM-over-IP (keyboard/video/mouse redirection); flash host BIOS and BMC firmware; and stream hardware sensor data (temperatures, fan speeds, voltages, power draw).
+
+### IPMI
+
+**IPMI** (Intelligent Platform Management Interface) is the protocol stack that standardises BMC communication. IPMI messages are carried inside **RMCP** (Remote Management and Control Protocol) datagrams delivered over UDP to port **623**. The **`ipmitool`** command-line utility is the canonical way to speak IPMI from a Linux host or CI runner:
+
+```bash
+# Power control
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret power status
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret power reset
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret power cycle
+
+# Serial-over-LAN (requires RMCP+ / lanplus interface)
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret sol activate
+
+# Hardware sensors (temperature, voltage, fan RPM)
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret sensor list
+
+# System Event Log — read BMC-level hardware alerts
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret sel list
+
+# BMC firmware and IPMI version info
+ipmitool -I lanplus -H <BMC-IP> -U admin -P secret mc info
+```
+
+IPMI's age shows in its binary TLV encoding, limited authentication options, and lack of a structured data model. For new automation, prefer **Redfish**.
+
+### Redfish
+
+**Redfish** is the modern REST/JSON API defined by the **DMTF** (Distributed Management Task Force) to replace IPMI for out-of-band server management. It exposes the same BMC capabilities — power control, firmware update, sensor telemetry — as JSON resources over HTTPS, making it trivially scriptable with any HTTP client.
+
+The API root is always `/redfish/v1/`. Key resource collections:
+
+```bash
+# Discover the service root
+curl -sk -u admin:secret https://<BMC-IP>/redfish/v1/ | python3 -m json.tool
+
+# List systems (a single server exposes one member)
+curl -sk -u admin:secret https://<BMC-IP>/redfish/v1/Systems/
+
+# Get system state: power, health, processors, memory
+curl -sk -u admin:secret https://<BMC-IP>/redfish/v1/Systems/1
+
+# Get BMC (manager) firmware version and network config
+curl -sk -u admin:secret https://<BMC-IP>/redfish/v1/Managers/1
+
+# Power reset via POST action
+curl -sk -u admin:secret -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"ResetType":"GracefulRestart"}' \
+  https://<BMC-IP>/redfish/v1/Systems/1/Actions/ComputerSystem.Reset
+```
+
+The Python `redfish` library (from DMTF) provides a higher-level client:
+
+```python
+import redfish
+
+client = redfish.redfish_client(
+    base_url="https://<BMC-IP>",
+    username="admin",
+    password="secret",
+    default_prefix="/redfish/v1"
+)
+client.login(auth="session")
+response = client.get("/redfish/v1/Systems/1")
+print(response.dict["PowerState"])   # "On" or "Off"
+client.logout()
+```
+
+Redfish is preferred over IPMI for automation because it uses standard HTTPS (firewalls understand it), returns structured JSON (no bespoke parsers), supports OAuth2 and session tokens, and its schema is versioned and machine-readable.
+
+### OOB Network Topology
+
+The OOB management network is a dedicated, physically segregated Ethernet segment. A typical design:
+
+- A dedicated **1GbE management switch** (separate from the compute fabric) with no data-plane ports
+- One **BMC port** per server cabled into the management switch — never shared with host NICs
+- A **jump host** (bastion) connected to both the OOB subnet and the operator's access network; all BMC access flows through it
+- **DNS** and **NTP** served from within the OOB subnet so that nodes can resolve names and synchronise time even if the data-plane is partitioned
+
+For guidance on sizing the OOB network as cluster scale grows from tens to thousands of nodes, see **Appendix J**.
+
+### Containerlab's `mgmt` Network as a Software OOB Analogue
+
+Containerlab's `mgmt:` block, introduced in §21.2 and §21.3, creates a Linux bridge on the host that provides exactly the same function as a hardware OOB management switch: all container management interfaces attach to it, and the host can reach any node's management IP without traversing any of the data-plane veth links. The topology YAML snippet from the GPU rail fabric illustrates the pattern:
+
+```yaml
+mgmt:
+  network: mgmt-gpu
+  ipv4-subnet: 172.20.20.0/24
+```
+
+**Containerlab** assigns each node a unique IPv4 address from this subnet (`mgmt-ipv4: 172.20.20.11` for spine1, and so on), places them all on the `mgmt-gpu` Linux bridge, and adds `/etc/hosts` entries so that `ssh admin@clab-gpu-rail-fabric-spine1` resolves without a DNS server. The bridge is only reachable from the host, mirroring the bastion model of a production OOB network.
+
+### `ipmitool` and Redfish in CI
+
+When a CI pipeline needs to power-cycle a physical lab node — for example, to test a BIOS update or a cold-boot recovery procedure — it can call `ipmitool` or `curl` against the Redfish API from a **GitHub Actions** runner that has network connectivity to the OOB subnet:
+
+```yaml
+- name: Power-cycle physical test node via Redfish
+  run: |
+    curl -sk -u ${{ secrets.BMC_USER }}:${{ secrets.BMC_PASS }} \
+      -X POST \
+      -H "Content-Type: application/json" \
+      -d '{"ResetType":"ForceRestart"}' \
+      https://${{ secrets.BMC_IP }}/redfish/v1/Systems/1/Actions/ComputerSystem.Reset
+    # Wait for node to come back online
+    until ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        user@${{ secrets.NODE_IP }} true 2>/dev/null; do
+      sleep 10
+    done
+    echo "Node back online"
+```
+
+Self-hosted runners on the OOB subnet can execute this step without exposing the BMC to the internet; the `secrets` context keeps credentials out of the repository.
+
+---
+
+## 21.10 Choosing a Local Kubernetes Environment
+
+The book's Kubernetes-centric chapters (**Chapter 12** — Cilium/eBPF, **Chapter 13** — Multus/SR-IOV, and **Chapter 31** — GPU Virtualization) each need a local cluster that can host multi-node topologies and custom CNI plugins. Five tools cover the realistic option space:
+
+| Tool | Nodes | Networking default | GPU support | Best for |
+|---|---|---|---|---|
+| **Kind** | Docker containers | kindnet (custom CNI supported) | via NVIDIA device plugin (limited without real GPU) | multi-node CI, CNI testing, Gateway API |
+| **k3s** | processes or VMs | Flannel (swappable via `--flannel-backend=none`) | yes — with NVIDIA device plugin | lightweight single/multi-node, ARM, edge inference |
+| **MicroK8s** | snap-installed process | Calico (addons swappable) | yes — `microk8s enable gpu` installs NVIDIA GPU Operator | Ubuntu-native, quick demos, DGX workstations |
+| **Minikube** | VM or Docker container | various CNI drivers (Calico, Cilium, Flannel) | yes — GPU passthrough with `--driver=kvm2` or `--gpus all` | single-node, driver variety, local dev |
+| **kubeadm** | bare-metal or VMs | any CNI (none installed by default) | yes — production-grade NVIDIA GPU Operator | production-like setups, full control |
+
+### Why This Book Uses Kind
+
+**Kind** (Kubernetes IN Docker) runs every node as a Docker container. This is ideal for the book's CI-first philosophy:
+
+- No VM hypervisor required — the same runner image that runs **Containerlab** topologies runs **Kind** clusters
+- Multi-node clusters are defined in a single YAML `--config` file; custom CNI plugins (including **Cilium**) are injected by disabling the default CNI at cluster creation time
+- Works natively in **GitHub Actions** `ubuntu-latest` runners without nested virtualisation
+- Cluster creation takes under 60 seconds
+
+```bash
+# Install Kind
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+# Create a 3-node cluster with default CNI disabled (ready for Cilium)
+cat <<EOF | kind create cluster --name ai-lab --config=-
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "10.244.0.0/16"
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+EOF
+
+# Install Cilium CNI
+helm repo add cilium https://helm.cilium.io/
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --set image.pullPolicy=IfNotPresent \
+  --set ipam.mode=kubernetes
+```
+
+### When to Choose k3s
+
+**k3s** is the right choice when hardware is constrained: it runs as a single binary consuming under 512 MB of RAM, works on ARM64 (Jetson, Raspberry Pi, Apple Silicon VMs), and is the standard runtime for edge inference serving deployments. Disable the built-in Flannel CNI and network policy controller to use **Cilium**:
+
+```bash
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
+  --flannel-backend=none \
+  --disable-network-policy" sh -
+```
+
+### When to Choose kubeadm
+
+**kubeadm** is the right choice when the lab exercise specifically requires production-grade fidelity: full **RBAC**, audit logging, custom admission webhooks, or `kubeconfig` files indistinguishable from a cloud-managed cluster. It requires pre-provisioned VMs or bare-metal nodes but gives complete control over every cluster parameter. Any CNI plugin works, and the **NVIDIA GPU Operator** installs identically to how it would in production.
+
+### CNI Compatibility Note
+
+**Cilium** — the CNI covered in **Chapter 12** — works with **Kind**, **k3s** (via `--flannel-backend=none`), and **kubeadm**. However, some Cilium features require a real Linux kernel rather than a container-in-container node: **eBPF host routing** and XDP acceleration do not function inside a Kind node because the container kernel is shared with the host and certain eBPF program types are restricted. For those exercises the book notes when a k3s VM or kubeadm bare-metal node is needed instead of Kind.
+
+---
+
 ## Lab Walkthrough 21 — GPU Rail Fabric: Full Step-by-Step
 
 This is the primary lab for Part VII. Every subsequent chapter's CI pipeline builds on this topology. Work through each step in order; expected output is shown so you can verify correctness before proceeding.
