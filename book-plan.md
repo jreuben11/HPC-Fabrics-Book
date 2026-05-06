@@ -9,25 +9,4 @@ See [README.md](README.md) for the reader-facing table of contents with links to
 
 ---
 
-# TODO
-- ~~plan a virtualization config chapter~~ → **DONE: Chapter 31** — GPU Virtualization & Isolation: VFIO, MIG, MPS & KubeVirt (25 pp); see book-outline.md Part IV
-- ~~plan a K8s programming chapter~~ → **DONE: Chapter 32** — Extending Kubernetes for AI Infrastructure: CNI, Device Plugins, Operators & Gateway API (25 pp); see book-outline.md Part IV
-- ~~plan an appendix of useful bash utils~~ → **DONE: Appendix H** — Bash & SR Linux CLI Reference (8 pp); see book-outline.md
-- ~~analyze book-outline.md~~ → **DONE**: added Ch33 (Inference Serving Fabric), Ch34 (Congestion Control & UEC), Appendix J (Reference Architectures); expansions planned for Ch7 (nftables), Ch21 (OOB mgmt + local cluster comparison), Ch26 (MACsec)
-- ~~plan an appendix of all K8s sigs~~ → **DONE: Appendix I** — Kubernetes SIGs & CNCF Project Landscape (8 pp); see book-outline.md
-- look at reference-map.md and suggest optimal stack (consider features, dev community size and development velocity) for each purpose and integrations between different stacks
----
-
-# To Investigate:
-- MACsec, IPsec, and TLS offer security at different OSI layers. MACsec provides high-speed Layer 2 point-to-point link encryption, IPsec ensures Layer 3 network-to-network or host-to-network security, and TLS secures Layer 4/5 application-to-application traffic. MACsec is ideal for data center links, IPsec for VPNs, and TLS for secure web/API communication.
-- nftables vs iptables vs bpfilter vs netfilter
-- Kind VS Minikube VS k3s vs microk8s vs KubeAdm https://mohamedyassine-bensaid.medium.com/minikube-vs-microk8s-vs-kubeadm-vs-kind-vs-k3s-5a8714c6835f
-- RoCEv2 (RDMA over Converged Ethernet v2) is not natively reorder-tolerant and expects packets to arrive in order, unlike TCP, which is designed to handle packet reordering and loss.Here are the key details regarding RoCEv2 and reordering:In-Order Expectation: While RoCEv2 uses UDP/IP for routing, the underlying RDMA transport expects packets with the same flow identifier (UDP source port) to arrive in order.Packet Reordering Impact: Out-of-order packets can cause performance issues and may be treated as dropped packets by the receiver.Lossless Requirement: Because RoCEv2 is not tolerant of loss or significant reordering, it is typically deployed in "lossless" Ethernet environments.Hardware Dependency: To prevent reordering, RoCEv2 depends on network infrastructure, such as switches supporting **Priority Flow Control (PFC)**, and careful configuration of techniques like ECMP (Equal-Cost Multi-Pathing) to ensure packets in a single flow follow the same path.Emerging Solutions: Recent research, such as [Eunomia], seeks to introduce reordering layers on the receiver side to manage this issue.In contrast, [**NVMe over TCP**] is highlighted as more tolerant of reordering and packet loss
-- NVMe over TCP (**NVMe/TCP**) is a high-performance storage networking protocol that extends Non-Volatile Memory Express (NVMe) commands over standard Ethernet networks, allowing fast, low-latency access to remote storage without specialized, costly hardware. Ratified in 2021, it is part of the **NVMe-oF** (over Fabrics) family, enabling disaggregated storage architectures in data centers and cloud-native apps
-- Designing multitenant GPU infrastructure: Isolation across virtualization and Kubernetes platforms. https://www.redhat.com/en/blog/designing-multitenant-gpu-infrastructure-isolation-across-virtualization-and-kubernetes-platforms  OpenShift Virtualization—GPU enablement: Learn how to configure NVIDIA vGPU, GPU passthrough, and the GPU operator for virtual machines on OpenShift
-Red Hat OpenStack Services on OpenShift—virtual GPUs: Step‑by‑step guide to exposing virtual GPUs (vGPU) to OpenStack instances
-NVIDIA GPU operator with OpenShift Virtualization: Official NVIDIA guide for deploying the NVIDIA GPU operator in a KubeVirt environment.
-- xGMI
-- reference architectures - eg https://www.nextplatform.com/connect/2026/04/28/new-google-networks-tuned-up-for-genai-inference-and-training/5218978 
-
 © 2025 jreuben1. Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

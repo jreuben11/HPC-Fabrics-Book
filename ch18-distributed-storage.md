@@ -258,9 +258,9 @@ LNet supports RDMA transfers, making Lustre over InfiniBand capable of full-fabr
 
 ## 18.4 DAOS — Distributed Asynchronous Object Storage
 
-DAOS (Intel/HPE) is purpose-built for NVMe SSDs and Intel Optane (SCM — Storage Class Memory). SCM (Storage Class Memory) refers to byte-addressable, persistent memory devices such as Intel Optane DCPMM or CXL-attached DRAMs that combine DRAM-class latency with the persistence of flash. SPDK (Storage Performance Development Kit) is an Intel open-source framework that drives NVMe devices from user space using DPDK-style polling, bypassing the Linux block layer and kernel I/O scheduler entirely. DAOS eliminates the OS I/O stack by using SPDK to access NVMe directly, achieving sub-100 µs I/O latency — orders of magnitude better than Lustre or Ceph.
+DAOS (Intel/HPE) is purpose-built for NVMe SSDs and Intel **Optane** (SCM — Storage Class Memory). **SCM (Storage Class Memory)** refers to byte-addressable, persistent memory devices such as Intel Optane DCPMM or **CXL**-attached DRAMs that combine DRAM-class latency with the persistence of flash. SPDK (Storage Performance Development Kit) is an Intel open-source framework that drives NVMe devices from user space using DPDK-style polling, bypassing the Linux block layer and kernel I/O scheduler entirely. DAOS eliminates the OS I/O stack by using SPDK to access NVMe directly, achieving sub-100 µs I/O latency — orders of magnitude better than Lustre or Ceph.
 
-CART (Communication and Remote Transactions) is the DAOS network transport library built on UCX and libfabric; it provides reliable, ordered message delivery and RPC semantics over RDMA fabrics without the overhead of a general-purpose messaging layer.
+**CART (Communication and Remote Transactions)** is the DAOS network transport library built on UCX and libfabric; it provides reliable, ordered message delivery and RPC semantics over RDMA fabrics without the overhead of a general-purpose messaging layer.
 
 ### 18.4.1 Architecture
 
@@ -302,7 +302,7 @@ Benchmark: writing a 400 GB checkpoint with DAOS over HDR InfiniBand: ~60 second
 
 ## 18.5 WEKA — NVMe-Native Parallel Filesystem
 
-WEKA (WekaFS) is a commercial parallel filesystem purpose-built for NVMe flash and high-performance RDMA fabrics. It occupies the space between Lustre (mature HPC filesystem, spinning-disk heritage) and DAOS (ultra-low-latency, Optane-native), offering sub-millisecond latency on NVMe without requiring specialized SCM hardware.
+WEKA (**WekaFS**) is a commercial parallel filesystem purpose-built for NVMe flash and high-performance RDMA fabrics. It occupies the space between Lustre (mature HPC filesystem, spinning-disk heritage) and DAOS (ultra-low-latency, Optane-native), offering sub-millisecond latency on NVMe without requiring specialized SCM hardware.
 
 ### 18.5.1 Architecture
 
@@ -333,10 +333,10 @@ Key design choices that differentiate WEKA from Lustre and Ceph:
 | Random 4K IOPS | Moderate | Moderate | Extreme | High |
 | Hardware requirement | Any | Any | SCM + NVMe | NVMe (no SCM needed) |
 | S3 compatibility | No | Yes (RGW) | No | Yes (native S3) |
-| GPUDirect Storage | Via Lustre-GDRCOPY | No | Experimental | Yes (native) |
+| GPUDirect Storage | Via **Lustre-GDRCOPY** | No | Experimental | Yes (native) |
 | Operational complexity | High | High | Very High | Medium |
 
-GPUDirect Storage (GDS) is an NVIDIA technology that establishes a direct DMA path between NVMe storage and GPU memory over the PCIe fabric, removing the CPU and system DRAM from the data path entirely. WEKA's GDS integration allows GPU memory to receive data directly from the NVMe drives over the PCIe fabric, bypassing CPU DRAM entirely. For checkpoint restore (loading a 400 GB model into GPU memory), GDS can reduce restore time by 30–50% compared to CPU-mediated reads.
+**GPUDirect Storage (GDS)** is an NVIDIA technology that establishes a direct DMA path between NVMe storage and GPU memory over the PCIe fabric, removing the CPU and system DRAM from the data path entirely. WEKA's GDS integration allows GPU memory to receive data directly from the NVMe drives over the PCIe fabric, bypassing CPU DRAM entirely. For checkpoint restore (loading a 400 GB model into GPU memory), GDS can reduce restore time by 30–50% compared to CPU-mediated reads.
 
 ### 18.5.3 Client Installation
 
@@ -515,23 +515,24 @@ MinIO is best for: dataset hosting (S3 API), model artifact storage (MLflow, DVC
 
 The cardinal rule of AI cluster storage networking: **checkpoint traffic must not share fabric bandwidth with gradient traffic.**
 
-```
-GPU training fabric (RDMA / RoCEv2):
+
+### GPU training fabric (RDMA / RoCEv2):
   - AllReduce gradient traffic (all-to-all, 400 Gbps per GPU)
   - Dedicated rail-optimized topology
   - DCQCN priority class 3
 
-Storage fabric (RDMA or iSCSI):    # iSCSI (Internet Small Computer Systems Interface) encapsulates SCSI block commands over TCP/IP, providing a lower-cost alternative to RDMA for storage fabrics where latency requirements are less stringent
+### Storage fabric (RDMA or iSCSI):    
+**iSCSI (Internet Small Computer Systems Interface)** encapsulates SCSI block commands over TCP/IP, providing a lower-cost alternative to RDMA for storage fabrics where latency requirements are less stringent
   - Checkpoint writes (periodic large bursts)
   - Dataset streaming (sustained, sequential)
   - Separate VLAN or separate physical switches
   - DCQCN priority class 2 (lower than training)
 
-Management fabric (Ethernet):
+### Management fabric (Ethernet):
   - Kubernetes control plane
   - SSH, monitoring, DNS
   - 25GbE shared
-```
+
 
 Failure to isolate: a 1000-GPU checkpoint event (1000 × 800 GB/1000 = 800 GB simultaneous write) saturates shared uplinks, causing AllReduce stalls precisely during the checkpoint. The training job appears to slow down at regular intervals — a classic symptom.
 

@@ -8,7 +8,7 @@
 
 Chapter 22 applies the disciplines of software engineering — static analysis, golden-state diffing, and automated CI pipelines — to network configuration management. By the end of this chapter you will have a working pipeline that runs **Batfish** intent checks on every pull request, spins up a **Containerlab** topology, connects to devices with **pyATS**, and fails the build if the live **BGP** state deviates from a captured golden snapshot.
 
-The need is direct and measurable. Production AI cluster incidents are disproportionately caused not by hardware failure but by configuration drift — a **BGP** policy that silently drops prefixes, an ACL that blocks **RDMA** port 4791, or a **VLAN** misconfiguration that breaks **PFC** on one ToR switch. By the time monitoring catches these failures, a training job has already stalled and the GPU hours are gone. The answer is to catch such bugs before they reach production, using the same merge-gate workflow that application teams have used for years.
+The need is direct and measurable. Production AI cluster incidents are disproportionately caused not by hardware failure but by configuration drift — a **BGP** policy that silently drops prefixes, an ACL that blocks **RDMA** port 4791, or a **VLAN** misconfiguration that breaks **PFC (Priority-based Flow Control)** on one ToR switch. By the time monitoring catches these failures, a training job has already stalled and the GPU hours are gone. The answer is to catch such bugs before they reach production, using the same merge-gate workflow that application teams have used for years.
 
 Chapter 21 introduced **Containerlab** as the environment in which network topologies can be deployed reproducibly. Chapter 22 builds the validation layer on top: static analysis with **Batfish** for the pre-flight check, structured state capture with **pyATS**/**Genie** for the golden diff, and inventory-driven automation with **Nornir** for mass device operations. Chapter 23 covers simulation for the cases that require deeper fidelity than emulation can provide.
 
@@ -19,6 +19,10 @@ Section 22.1 frames the software-engineering case for treating network configura
 ---
 
 ## Installation
+
+**Batfish** https://www.batfish.org is a network configuration analysis tool that can find bugs and guarantee the correctness of (planned or current) network configurations. It enables network engineers to rapidly and safely evolve their network, without fear of outages or security breaches.
+**pyATS (Python Automated Test Systems)** is a Cisco-developed Python3-based DevOps ecosystem and framework for testing, validating, and managing network infrastructure. It enables network engineers to automate daily tasks, sanity checks, and complex testing across routers and switches from various vendors, featuring powerful parsing capabilities to turn CLI output into structured data.
+**Nornir** is an automation framework written in python to be used with python. Nornir will take care of dealing with the inventory where you have your host information, it will take care of dispatching the tasks to your devices and will provide a common framework to write “plugins”.
 
 **Batfish** is deployed as a **Docker** container and exposes a **gRPC** API on port 9997; the **pybatfish** Python client connects to that API and is the primary interface for loading snapshots, running reachability questions, and asserting golden-config invariants. **pyATS** and **Genie** provide structured parsing of device CLI output against live or emulated devices, enabling deterministic golden-diff tests that detect unexpected state changes. **Nornir** is the Python-native automation framework that drives parallel device operations and integrates with **pytest** to form merge-gate CI assertions. **Containerlab** is installed alongside these tools because the chapter's pipeline deploys a live topology for **pyATS** tests to run against after **Batfish** static analysis passes.
 
@@ -564,8 +568,8 @@ Expected:
 
 Batfish requires a `hosts/` directory alongside `configs/`. Host files declare IP-to-interface mappings for non-NOS endpoints (the server containers in our topology).
 
-```bash
-cat > snapshot-baseline/hosts/server1.json << 'EOF'
+- snapshot-baseline/hosts/server1.json 
+```json
 {
   "hostname": "server1",
   "hostInterfaces": {
@@ -583,9 +587,10 @@ cat > snapshot-baseline/hosts/server1.json << 'EOF'
     }
   }
 }
-EOF
+```
 
-cat > snapshot-baseline/hosts/server2.json << 'EOF'
+- snapshot-baseline/hosts/server2.json 
+```json
 {
   "hostname": "server2",
   "hostInterfaces": {
@@ -603,7 +608,6 @@ cat > snapshot-baseline/hosts/server2.json << 'EOF'
     }
   }
 }
-EOF
 ```
 
 Verify the complete layout:
@@ -858,8 +862,7 @@ Expected:
 
 Remove those lines from the proposed snapshot:
 
-```bash
-python3 - <<'EOF'
+```python 
 import re
 
 with open("snapshot-baseline/configs/tor-rail0.cfg") as f:
@@ -878,7 +881,6 @@ with open("snapshot-proposed/configs/tor-rail0.cfg", "w") as f:
 print(f"Breaking change applied: removed BGP neighbor 192.168.10.1 from tor-rail0")
 print(f"Baseline lines: {len(content.splitlines())}")
 print(f"Proposed lines: {len(broken.splitlines())}")
-EOF
 ```
 
 Expected:
@@ -1020,16 +1022,16 @@ Exit code: 1
 
 Restore the BGP neighbor (simulating the engineer reverting the mistake):
 
-```bash
-cp snapshot-baseline/configs/tor-rail0.cfg snapshot-proposed/configs/tor-rail0.cfg
-
-python3 - <<'EOF'
+```python 
 from pybatfish.client.session import Session
 bf = Session(host="localhost")
 bf.set_network("gpu-rail-fabric")
 bf.init_snapshot("./snapshot-proposed", name="proposed", overwrite=True)
 print("Fixed snapshot reloaded.")
-EOF
+```
+
+```bash
+cp snapshot-baseline/configs/tor-rail0.cfg snapshot-proposed/configs/tor-rail0.cfg
 
 python3 assert_no_regression.py
 echo "Exit code: $?"

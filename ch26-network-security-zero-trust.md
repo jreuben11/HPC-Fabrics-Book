@@ -12,15 +12,20 @@ This chapter builds a complete zero-trust security model for AI cluster fabrics,
 
 The chapter begins with a realistic threat model (§26.1) that identifies the attack vectors unique to GPU clusters: **RDMA**-level eavesdropping and injection, NIC firmware exploitation via out-of-band management interfaces, and management-plane credential leakage through training job artifacts. These are not theoretical — each has occurred in production environments. Understanding the threat model is a prerequisite for understanding why the defenses are designed the way they are.
 
-From there the chapter covers the full zero-trust stack (§26.2–26.8): **Cilium** transparent encryption for automatic node-to-node **WireGuard** or **IPsec** coverage with zero application changes; manual **WireGuard** configuration to understand the underlying Curve25519/ChaCha20-Poly1305 cryptographic primitives; **strongSwan** **IKEv2** with certificate-based mutual authentication for compliance environments requiring standards-track **IPsec**; **SPIFFE**/**SPIRE** for portable workload identity that survives topology changes; **HashiCorp Vault** for dynamic, short-lived PKI credentials; and **Cilium** `CiliumNetworkPolicy` for identity-based network segmentation enforced at the eBPF layer.
+From there the chapter covers the full zero-trust stack (§26.2–26.8): **Cilium** transparent encryption for automatic node-to-node **WireGuard** or **IPsec** coverage with zero application changes; manual **WireGuard** configuration to understand the underlying `Curve25519`/`ChaCha20-Poly1305` cryptographic primitives; **strongSwan** **IKEv2** with certificate-based mutual authentication for compliance environments requiring standards-track **IPsec**; **SPIFFE**/**SPIRE** for portable workload identity that survives topology changes; **HashiCorp Vault** for dynamic, short-lived PKI credentials; and **Cilium** `CiliumNetworkPolicy` for identity-based network segmentation enforced at the eBPF layer.
 
 This chapter connects directly to Chapter 12 (**Cilium** eBPF architecture), Chapter 15 (gNMI telemetry for detecting management-plane anomalies), and Chapter 13 (**SR-IOV** and **RDMA** device plugin, which determines what NIC resources are exposed to pods). The lab walkthrough ties the primitives together into a working encrypted overlay, with tcpdump verification that no plaintext traverses the underlay fabric.
 
 ---
 
 ## Installation
+- **strongSwan** is an open-source, multiplatform **IPsec**-based VPN solution that provides secure, encrypted communication. It implements the **Internet Key Exchange (IKEv1 / IKEv2)** protocols to establish encrypted tunnels, supporting site-to-site and roadwarrior (remote access) scenarios
+- **WireGuard** is a modern, open-source **VPN** protocol designed to be extremely fast, simple, and secure. It uses state-of-the-art cryptography to establish encrypted tunnels, operating much more efficiently than older, complex protocols like **OpenVPN** or **IPsec**. It is widely used for securing internet traffic across various platforms
+- **SPIFFE (Secure Production Identity Framework for Everyone)** is an open-source standard for providing secure, automatic, and cryptographic identities to software services (workloads) across heterogeneous environments. It eliminates static secrets by issuing **short-lived, verifiable identities (SVIDs)** via a standardized API. It is often referred to as a uniform identity control plane or a universal ID card system for software.
+- **SPIRE (SPIFFE Runtime Environment)** is an open-source software toolchain that implements the **SPIFFE** standards to provide secure, automated, cryptographic identity management for software workloads. It acts as the operational infrastructure that authenticates services (workloads) across heterogeneous environments, enabling secure mTLS or JWT communication without relying on static, vulnerable secrets.
+- An **X.509 certificate** is a standardized digital document used in **Public Key Infrastructure (PKI)** to securely bind cryptographic key pairs to identities (websites, users, or devices). Primarily used for **TLS/SSL** in HTTPS, these certificates ensure authentication, data integrity, and encrypted communication across networks
 
-This chapter requires five distinct tool families. The `wireguard-tools` package provides `wg` and `wg-quick` for managing Curve25519 key pairs and the **WireGuard** kernel interface directly. `strongswan` installs the charon **IKEv2** daemon and the `swanctl` management CLI, which are needed for the standards-track **IPsec** tunnels required in compliance environments. **SPIRE** server and agent binaries provide the **SPIFFE** workload identity infrastructure that issues and rotates X.509 SVIDs, decoupling identity from IP address assignment. **HashiCorp Vault** and **Cilium** (deployed via **Helm** in the lab) complete the stack: **Vault** manages the intermediate CA and issues short-lived PKI credentials, while **Cilium** enforces transparent **WireGuard** or **IPsec** encryption node-to-node without any application changes.
+This chapter requires five distinct tool families. The `wireguard-tools` package provides `wg` and `wg-quick` for managing Curve25519 key pairs and the **WireGuard** kernel interface directly. `strongswan` installs the charon **IKEv2** daemon and the `swanctl` management CLI, which are needed for the standards-track **IPsec** tunnels required in compliance environments. **SPIRE** server and agent binaries provide the **SPIFFE** workload identity infrastructure that issues and rotates **X.509 SVID**s, decoupling identity from IP address assignment. **HashiCorp Vault** and **Cilium** (deployed via **Helm** in the lab) complete the stack: **Vault** manages the intermediate CA and issues short-lived PKI credentials, while **Cilium** enforces transparent **WireGuard** or **IPsec** encryption node-to-node without any application changes.
 
 ### System packages
 
@@ -171,7 +176,7 @@ Zero trust collapses the implicit "inside = trusted" assumption. Every network c
 
 In a Kubernetes cluster, pod IP addresses change with every restart. In a fabric with dynamic routing, the ingress point of a flow changes with every ECMP path change. IP address is not a stable identity anchor. Instead:
 
-- **Workload identity**: SPIFFE URI encoded in an X.509 SVID (`spiffe://cluster.local/ns/training/sa/nccl-worker`)
+- **Workload identity**: SPIFFE URI encoded in an **X.509 SVID** (`spiffe://cluster.local/ns/training/sa/nccl-worker`)
 - **Node identity**: Cilium assigns a numeric identity derived from the pod's labels and namespace, enforced by its eBPF data plane
 - **Service account tokens**: Kubernetes-signed JWTs bound to a specific pod and service account
 
@@ -201,7 +206,7 @@ Zero-Trust Stack (bottom-up):
 
 ## 26.3 Cilium Transparent Encryption
 
-Cilium supports two transparent encryption modes: WireGuard and IPsec. "Transparent" means application pods require zero configuration changes — encryption is inserted at the node level by Cilium's eBPF data plane.
+**Cilium** supports two transparent encryption modes: **WireGuard** and **IPsec**. "Transparent" means application pods require zero configuration changes — encryption is inserted at the node level by Cilium's eBPF data plane.
 
 ### WireGuard Mode
 
@@ -250,7 +255,7 @@ cilium encrypt status
 
 ### IPsec Mode
 
-IPsec mode uses the Linux xfrm framework. Cilium pre-shares a symmetric key and programs xfrm states/policies for every node pair:
+IPsec mode uses the Linux **xfrm** framework. Cilium pre-shares a symmetric key and programs xfrm states/policies for every node pair:
 
 ```bash
 # Generate a pre-shared key (256-bit AES-CBC or AES-GCM)
@@ -295,7 +300,7 @@ kubectl patch secret cilium-ipsec-keys -n kube-system \
 
 ## 26.4 WireGuard for Overlay Encryption
 
-WireGuard is a modern VPN protocol integrated into the Linux kernel since 5.6. It uses Curve25519 for key exchange, ChaCha20-Poly1305 for authenticated encryption, and has a codebase of under 4,000 lines — an order of magnitude smaller than OpenVPN or IPsec stacks.
+WireGuard is a modern VPN protocol integrated into the Linux kernel since 5.6. It uses **Curve25519** for key exchange, **ChaCha20-Poly1305** for authenticated encryption, and has a codebase of under 4,000 lines — an order of magnitude smaller than OpenVPN or IPsec stacks.
 
 ### Key Concepts
 
@@ -564,7 +569,7 @@ kubectl exec -n spire-system deployment/spire-server -- \
 
 ### cert-manager Integration
 
-cert-manager provides automated X.509 lifecycle management in Kubernetes, backed by various issuers (Let's Encrypt, Vault, self-signed):
+**cert-manager** provides automated X.509 lifecycle management in Kubernetes, backed by various issuers (**Let's Encrypt**, **Vault**, **self-signed**):
 
 ```bash
 # Install cert-manager
@@ -865,11 +870,11 @@ cilium hubble observe \
 
 All of the encryption mechanisms discussed so far — **WireGuard** (§26.4), **IPsec** with **strongSwan** (§26.5), and Cilium transparent encryption (§26.3) — operate at Layer 3 or above. They protect IP packets after they have been assembled in the host kernel. **MACsec** (**IEEE 802.1AE**) takes a fundamentally different approach: it encrypts and authenticates Ethernet frames at Layer 2, before they are placed on the wire, entirely below the IP layer. This makes MACsec transparent to every L3+ protocol — TCP, UDP, BGP, and critically **RoCEv2** and **RDMA** — because the encryption and decryption happen at the link layer before any L3 processing occurs.
 
-IEEE 802.1AE defines a frame format that wraps the original Ethernet payload in a **SecTAG** (Security Tag) and appends an **ICV** (Integrity Check Value). The cipher suite is GCM-AES-128 or GCM-AES-256. Each protected Ethernet frame carries a 64-bit **SCI** (Secure Channel Identifier) that identifies the transmitter and a packet number that prevents replay attacks. Because the header additions total approximately 32 bytes on top of the original Ethernet frame, MACsec has a small but measurable impact on MTU and effective throughput at very small packet sizes.
+**IEEE 802.1AE** defines a frame format that wraps the original Ethernet payload in a **SecTAG** **(Security Tag)** and appends an **ICV** **(Integrity Check Value)**. The cipher suite is **GCM-AES-128** or **GCM-AES-256**. Each protected Ethernet frame carries a 64-bit **SCI** (**Secure Channel Identifier**) that identifies the transmitter and a packet number that prevents replay attacks. Because the header additions total approximately 32 bytes on top of the original Ethernet frame, MACsec has a small but measurable impact on MTU and effective throughput at very small packet sizes.
 
 ### Why MACsec Matters for AI Clusters
 
-The spine-leaf fabric in a large GPU cluster contains hundreds of patch-panel interconnects, fibre runs, and ToR uplinks — each a potential site for a physical tap. An attacker who clips a fibre tap onto an unencrypted 400GbE spine link captures raw gradient tensors from NCCL AllReduce collectives with no decryption effort required. MACsec closes this physical-interception vector by encrypting every frame on the link before it leaves the NIC or switch port.
+The spine-leaf fabric in a large GPU cluster contains hundreds of patch-panel interconnects, fibre runs, and ToR uplinks — each a potential site for a physical tap. An attacker who clips a **fibre tap** https://en.wikipedia.org/wiki/Fiber_tapping onto an unencrypted 400GbE spine link captures raw gradient tensors from NCCL AllReduce collectives with no decryption effort required. MACsec closes this physical-interception vector by encrypting every frame on the link before it leaves the NIC or switch port.
 
 Compared with IPsec, MACsec adds no per-packet IP-header processing: it operates on Ethernet frames and therefore imposes no additional overhead on protocols that already bypass the kernel IP stack. With hardware offload (see below), MACsec encryption and decryption are performed entirely in the NIC ASIC and are invisible to the CPU and to the RDMA subsystem. This means that **hardware-offloaded MACsec is fully compatible with RoCEv2**: the RDMA verbs engine posts work requests to the NIC, the NIC DMA-reads the payload from GPU memory, encrypts the frame in-hardware, and places the protected Ethernet frame on the wire — all without involving the host kernel IP stack. Software MACsec, by contrast, processes frames in the kernel `macsec` driver and therefore does not intercept RDMA traffic that bypasses the kernel entirely *(see §26.1 on RDMA bypassing kernel hooks)*. For RoCEv2 protection, hardware offload is required.
 
@@ -879,11 +884,12 @@ MACsec addresses two rows from the threat matrix *(see §26.1)* directly: physic
 
 Static pre-shared keys are operationally fragile in a fabric with hundreds of links. **MACsec Key Agreement** (**MKA**), defined in IEEE 802.1X-2010, provides automated key distribution. The core concepts:
 
-- **CAK** (Connectivity Association Key): the long-lived pre-shared secret seeding the key hierarchy, identified by the 32-byte **CKN** (CAK Name)
-- **SAK** (Secure Association Key): the short-lived per-session encryption key derived from the CAK by the **KaY** (Key Agreement Entity) and distributed to both ends of the link
+- **CAK** (**Connectivity Association Key**): the long-lived pre-shared secret seeding the key hierarchy, identified by the 32-byte **CKN** (**CAK Name**)
+- **SAK** (**Secure Association Key**): the short-lived per-session encryption key derived from the CAK by the **KaY** (**Key Agreement Entity**) and distributed to both ends of the link
 - **Secure Channel**: a unidirectional encrypted channel identified by an SCI; each link has two channels (one per direction)
+- **EAPOL** (**Extensible Authentication Protocol over LAN**) is a network port authentication protocol (**IEEE 802.1X**) used to encapsulate EAP messages directly over Ethernet (Layer 2) for wired and wireless network access control. It enables secure authentication by connecting a supplicant (client) to an authentication server (e.g., RADIUS) through an authenticator (switch/AP) before allowing network access.
 
-The **KaY** entity runs inside `wpa_supplicant` on Linux. It performs the MKA handshake over EAPOL frames, derives the SAK, and programs the SAK and SCI into the kernel `macsec` driver or the NIC hardware automatically.
+The **KaY** entity runs inside `wpa_supplicant` on Linux. It performs the MKA handshake over **EAPOL** frames, derives the SAK, and programs the SAK and SCI into the kernel `macsec` driver or the NIC hardware automatically.
 
 ### Linux MACsec: Manual Static-Key Configuration
 
@@ -968,9 +974,12 @@ ip macsec show
 
 ### Hardware Offload on NVIDIA ConnectX-7
 
-Software MACsec processes frames in the Linux kernel `macsec` driver. Because the kernel's AES-GCM implementation is CPU-bound and single-threaded per flow, software MACsec throughput typically reaches 7–10 Gbps on a modern server core — adequate for management links but far short of the 200/400GbE speeds used on AI cluster spine links.
+**AES-GCM** (**Advanced Encryption Standard with Galois/Counter Mode**) is a widely adopted, high-performance symmetric key cipher providing both data confidentiality and authentication (AEAD). It is highly efficient for modern processors, enabling fast, parallelized encryption, and is used extensively in TLS, VPNs, and hardware security.
+**SecTAG (Security Tag)** is a core component of the IEEE 802.1AE MACsec IEEE802 standard, which provides data confidentiality, integrity, and authenticity for Ethernet frames at Layer 2. It is a header inserted into Ethernet frames to identify the secure channel and association used to protect the data.
+An **Integrity Check Value (ICV)** is a computed cryptographic value—essentially a digital fingerprint—attached to a network data packet or frame to ensure its integrity and authenticity. It allows the receiving device to verify that the message has not been altered, tampered with, or corrupted during transmission.
+Software MACsec processes frames in the Linux kernel `macsec` driver. Because the kernel's **AES-GCM** implementation is CPU-bound and single-threaded per flow, software MACsec throughput typically reaches 7–10 Gbps on a modern server core — adequate for management links but far short of the 200/400GbE speeds used on AI cluster spine links.
 
-**NVIDIA ConnectX-7** (and later) NICs support MACsec full offload: the GCM-AES encryption, SecTAG insertion, ICV generation, anti-replay check, and decapsulation are all performed in the NIC ASIC at line rate. This requires `CONFIG_MLX5_EN_MACSEC=y` in the kernel and MLNX_OFED firmware support.
+**NVIDIA ConnectX-7** (and later) NICs support MACsec full offload: the **GCM-AES** encryption, **SecTAG** insertion, **ICV** generation, anti-replay check, and decapsulation are all performed in the NIC ASIC at line rate. This requires `CONFIG_MLX5_EN_MACSEC=y` in the kernel and MLNX_OFED firmware support.
 
 ```bash
 # Create a MACsec interface with MAC-layer hardware offload
@@ -999,11 +1008,11 @@ With hardware offload active on ConnectX-7, MACsec operates at wire-rate 400GbE.
 
 ### Limitations
 
-MACsec as defined in IEEE 802.1AE is inherently **point-to-point**: a Secure Channel connects exactly two endpoints. Deploying MACsec on a full spine-leaf fabric therefore requires a separate Secure Channel — and a separate CAK/SAK pair — for every physical link. Without an 802.1X infrastructure (a RADIUS server distributing CAKs to switch ports and NICs), operational complexity scales with the number of links.
+MACsec as defined in IEEE 802.1AE is inherently **point-to-point**: a Secure Channel connects exactly two endpoints. Deploying MACsec on a full spine-leaf fabric therefore requires a separate Secure Channel — and a separate **CAK/SAK** pair — for every physical link. Without an 802.1X infrastructure (a RADIUS server distributing CAKs to switch ports and NICs), operational complexity scales with the number of links.
 
 A second architectural limitation arises when MACsec is combined with VXLAN overlays. VXLAN encapsulation runs in the kernel and produces new Ethernet frames that MACsec has never seen. If MACsec is applied to the physical interface before VXLAN encapsulation, the VXLAN outer Ethernet frame is not encrypted. MACsec must be applied per-link on the physical NIC after encapsulation completes, which requires careful ordering of network interface setup.
 
-Finally, as of mid-2025 there is no widely adopted Kubernetes operator or CNI plugin that configures MACsec automatically the way Cilium configures WireGuard or IPsec. MACsec link configuration must be applied as node-level provisioning (via Ansible, cloud-init, or a DaemonSet that runs privileged `ip` commands), outside the Kubernetes control plane.
+Finally, as of mid-2025 there is no widely adopted Kubernetes operator or CNI plugin that configures MACsec automatically the way Cilium configures WireGuard or IPsec. MACsec link configuration must be applied as node-level provisioning (via **Ansible**, **cloud-init**, or a DaemonSet that runs privileged `ip` commands), outside the Kubernetes control plane.
 
 ### MACsec vs IPsec vs WireGuard Comparison
 

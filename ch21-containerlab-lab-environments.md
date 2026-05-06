@@ -10,7 +10,7 @@ Chapter 21 introduces **Containerlab**, the infrastructure-as-code tool that tur
 
 The motivation is practical and urgent. AI cluster networking is complex enough that a mis-configured ACL, a **BGP** policy bug, or a mis-wired ECMP path can silently degrade **AllReduce** throughput by 10× without triggering any obvious alarm. The only way to catch these problems early is to test them in an environment that mirrors production as closely as possible, as early as possible — ideally before any config change merges. **Containerlab** makes that possible on a laptop.
 
-Chapter 20 described the fabric demands of distributed AI training: rail-optimized topology, lossless **RDMA**, sub-microsecond jitter budgets. This chapter builds the emulation environment in which those properties can be tested without production hardware. Chapter 22 extends that environment into a full CI/CD pipeline with static analysis and golden-diff validation; Chapter 23 covers simulation tools for the cases where emulation is insufficient.
+Chapter 20 described the fabric demands of distributed AI training: rail-optimized topology, lossless **RDMA**, sub-microsecond jitter budgets. This chapter builds the emulation environment in which those properties can be tested without production hardware. Chapter 22 extends that environment into a full CI/CD pipeline with static analysis and **golden-diff validation**; Chapter 23 covers simulation tools for the cases where emulation is insufficient.
 
 **Containerlab** achieves its simplicity by treating standard **Docker** containers as network nodes and Linux veth pairs as links. Each NOS image — Nokia **SR Linux**, **SONiC-VS**, **FRR** — runs in an unmodified **Docker** container; **Containerlab** wires the containers together at the network-namespace level and injects startup configuration files. The result is a reproducible, version-controlled, diff-reviewable network topology that boots in under two minutes and is torn down with a single command.
 
@@ -91,7 +91,7 @@ python -c "import netmiko, paramiko, yaml; print('OK')"
 
 ## 21.1 Infrastructure-as-Code for Network Labs
 
-The traditional approach to network lab work is to configure a topology by hand in a GUI (GNS3, EVE-NG), save it in a proprietary format, and share it as a file attachment. GNS3 (Graphical Network Simulator-3) and EVE-NG (Emulated Virtual Environment Next Generation) are popular GUI-driven network emulation platforms that let operators drag-and-drop virtual routers and switches into a canvas topology, but they store their topology state in opaque files rather than text that can be version-controlled or executed in CI. This is inherently unscalable: the topology is not version-controlled, changes are hard to review, and CI integration is nearly impossible.
+The traditional approach to network lab work is to configure a topology by hand in a GUI (**GNS3**, **EVE-NG**), save it in a proprietary format, and share it as a file attachment. GNS3 (**Graphical Network Simulator-3**) and EVE-NG (**Emulated Virtual Environment Next Generation**) are popular GUI-driven network emulation platforms that let operators drag-and-drop virtual routers and switches into a canvas topology, but they store their topology state in opaque files rather than text that can be version-controlled or executed in CI. This is inherently unscalable: the topology is not version-controlled, changes are hard to review, and CI integration is nearly impossible.
 
 Containerlab treats network topology as code. A YAML file describes nodes and links; `containerlab deploy` spins up the topology in seconds using Docker. The topology file can be committed to git, reviewed as a diff, and executed in a CI pipeline on every PR.
 
@@ -249,7 +249,7 @@ network-instance default:
 
 ### FRR Container as Host Router
 
-FRR (Free Range Routing) is an open-source IP routing suite that implements BGP, OSPF, ISIS, and other protocols on Linux; it is the successor to Quagga and is widely used in cloud and HPC environments. In Containerlab, an FRR container deployed as `kind: linux` acts as a fully-capable software router that peers with switch nodes via standard BGP sessions.
+**FRR (Free Range Routing)** is an open-source IP routing suite that implements BGP, OSPF, ISIS, and other protocols on Linux; it is the successor to **Quagga** and is widely used in cloud and HPC environments. In Containerlab, an FRR container deployed as `kind: linux` acts as a fully-capable software router that peers with switch nodes via standard BGP sessions.
 
 ```yaml
 nodes:
@@ -304,7 +304,7 @@ containerlab graph -t topology.yml   # starts HTTP server with interactive graph
 
 ## 21.6 VM-Based Nodes via vrnetlab
 
-For NOS images that require real VMs (IOS-XE, JunOS vMX, vSRX), `vrnetlab` wraps the VM in a container using KVM/QEMU:
+For NOS images that require real VMs (IOS-XE, JunOS vMX, vSRX), `vrnetlab` wraps the VM in a container using **KVM/QEMU**:
 
 ```bash
 # Build a vrnetlab image for Cisco CSR1000v
@@ -318,7 +318,7 @@ nodes:
     image: vrnetlab/vr-csr:17.03.02
 ```
 
-vrnetlab supports: JunOS vMX, vSRX, vQFX; Cisco IOS-XE, NX-OS; Arista vEOS; Mikrotik RouterOS; and more.
+**vrnetlab** supports: JunOS vMX, vSRX, vQFX; Cisco IOS-XE, NX-OS; Arista vEOS; Mikrotik RouterOS; and more.
 
 ---
 
@@ -422,7 +422,7 @@ Production GPU clusters require a second, physically separate network whose sole
 
 ### Baseboard Management Controllers
 
-Every modern server motherboard carries a **BMC** (Baseboard Management Controller): a dedicated microcontroller with its own processor, RAM, and 1GbE Ethernet port that runs independently of the host CPU and OS. The BMC remains powered as long as the server has AC mains connected, even when the host is powered off.
+Every modern server motherboard carries a **BMC** (**Baseboard Management Controller**): a dedicated microcontroller with its own processor, RAM, and 1GbE Ethernet port that runs independently of the host CPU and OS. The BMC remains powered as long as the server has AC mains connected, even when the host is powered off.
 
 Vendor names differ but the function is identical:
 
@@ -431,11 +431,11 @@ Vendor names differ but the function is identical:
 - **AMI MegaRAC** — the OEM firmware used by many whitebox and ODM vendors (Supermicro, ASRock Rack, Gigabyte)
 - **OpenBMC** — the open-source BMC stack used by Meta, Google, and increasingly by ODM partners
 
-From the OOB network a BMC can: toggle host power on/off/reset; present a serial console via Serial-over-LAN (**SoL**); provide KVM-over-IP (keyboard/video/mouse redirection); flash host BIOS and BMC firmware; and stream hardware sensor data (temperatures, fan speeds, voltages, power draw).
+From the OOB network a BMC can: toggle host power on/off/reset; present a serial console via **Serial-over-LAN** (**SoL**); provide **KVM-over-IP** (keyboard/video/mouse redirection); flash host BIOS and BMC firmware; and stream hardware sensor data (temperatures, fan speeds, voltages, power draw).
 
 ### IPMI
 
-**IPMI** (Intelligent Platform Management Interface) is the protocol stack that standardises BMC communication. IPMI messages are carried inside **RMCP** (Remote Management and Control Protocol) datagrams delivered over UDP to port **623**. The **`ipmitool`** command-line utility is the canonical way to speak IPMI from a Linux host or CI runner:
+**IPMI** (**Intelligent Platform Management Interface**) is the protocol stack that standardises BMC communication. IPMI messages are carried inside **RMCP** (**Remote Management and Control Protocol**) datagrams delivered over UDP to port **623**. The **`ipmitool`** command-line utility is the canonical way to speak IPMI from a Linux host or CI runner:
 
 ```bash
 # Power control
@@ -460,7 +460,7 @@ IPMI's age shows in its binary TLV encoding, limited authentication options, and
 
 ### Redfish
 
-**Redfish** is the modern REST/JSON API defined by the **DMTF** (Distributed Management Task Force) to replace IPMI for out-of-band server management. It exposes the same BMC capabilities — power control, firmware update, sensor telemetry — as JSON resources over HTTPS, making it trivially scriptable with any HTTP client.
+**Redfish** is the modern REST/JSON API defined by the **DMTF** (**Distributed Management Task Force**) to replace IPMI for out-of-band server management. It exposes the same BMC capabilities — power control, firmware update, sensor telemetry — as JSON resources over HTTPS, making it trivially scriptable with any HTTP client.
 
 The API root is always `/redfish/v1/`. Key resource collections:
 
@@ -825,9 +825,8 @@ topology:
 
 Now write the four SR Linux startup configs:
 
-```bash
-# configs/spine1.yml
-cat > configs/spine1.yml << 'EOF'
+- configs/spine1.yml 
+```YML
 interface ethernet-1/1:
   admin-state: enable
   subinterface 0:
@@ -860,10 +859,10 @@ network-instance default:
       neighbor 192.168.20.0:
         peer-group: TORS
         peer-as: 65002
-EOF
+```
 
-# configs/spine2.yml
-cat > configs/spine2.yml << 'EOF'
+- configs/spine2.yml
+```YML
 interface ethernet-1/1:
   admin-state: enable
   subinterface 0:
@@ -896,10 +895,10 @@ network-instance default:
       neighbor 192.168.21.0:
         peer-group: TORS
         peer-as: 65002
-EOF
+```
 
-# configs/tor-rail0.yml
-cat > configs/tor-rail0.yml << 'EOF'
+- configs/tor-rail0.yml
+```YML
 interface ethernet-1/1:
   admin-state: enable
   subinterface 0:
@@ -946,10 +945,10 @@ network-instance default:
       neighbor 192.168.11.1:
         peer-group: SPINES
         peer-as: 65100
-EOF
+```
 
-# configs/tor-rail1.yml
-cat > configs/tor-rail1.yml << 'EOF'
+- configs/tor-rail1.yml
+```YML
 interface ethernet-1/1:
   admin-state: enable
   subinterface 0:
@@ -996,7 +995,6 @@ network-instance default:
       neighbor 192.168.21.1:
         peer-group: SPINES
         peer-as: 65100
-EOF
 ```
 
 Verify the directory layout:
@@ -1187,8 +1185,8 @@ A:tor-rail0# show interface brief
 +--------------------+------+-----+----------------+
 ```
 
-Add a VXLAN-style loopback to represent the rail VTEP (optional, for VXLAN chapters):
-
+Add a **VXLAN**-style loopback to represent the rail **VTEP** (optional, for VXLAN chapters):
+- A **Virtual Tunnel Endpoint (VTEP)** is a networking device or software component that encapsulates and decapsulates packets in **VXLAN (Virtual Extensible LAN)** overlay networks, bridging Layer 2 traffic over Layer 3 infrastructure. It acts as the tunnel endpoint for virtual machine or container traffic, facilitating network virtualization in data centers
 ```
 A:tor-rail0# enter candidate
 A:tor-rail0# set interface lo0 subinterface 0 ipv4 address 10.255.0.21/32

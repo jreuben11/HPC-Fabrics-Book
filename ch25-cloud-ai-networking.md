@@ -531,7 +531,9 @@ cat /sys/class/infiniband/rdmap0s31/ports/1/counters/rdma_rc_current_connections
 | **Peak bandwidth (per GPU)** | p5: 400 Gbps / GPU (EFA) | ConnectX-7 400GbE: 400 Gbps / GPU |
 | **Fabric latency** | 10–15 µs (EFA) | 1–2 µs (IB HDR), 2–5 µs (RoCEv2) |
 | **Burst capacity** | Instant (if capacity available) | Fixed; requires over-provisioning |
-| **Fabric observability** | Limited (no SM access, no MADs) | Full (OpenSM, ibnetdiscover, perfquery) |
+| **Fabric observability** | Limited (no SM access, no MADs) | Full (OpenSM, ibnetdiscover, perfqueModule Loading and Integration:
+
+ry) |
 | **Custom firmware / tuning** | Not possible | Full control |
 | **Multi-tenant security** | Provider guarantees | You control isolation |
 | **Long-running jobs (>6 months)** | Expensive (reserved instances help) | Cost-effective |

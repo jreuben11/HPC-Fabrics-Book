@@ -184,24 +184,27 @@ NCCL builds a topology map at initialization, using system information to unders
 ```bash
 # Provide explicit topology file for complex fabrics
 NCCL_TOPO_FILE=/etc/nccl/cluster_topo.xml
-
-# Example topology file (NCCL XML format):
-# <system>
-#   <cpu id="0" affinity="0-23" arch="x86_64" vendor="GenuineIntel">
-#     <pci busid="0000:3b:00.0" class="0x030200" vendor="0x10de" device="0x2330">
-#       <!-- H100 GPU 0 -->
-#     </pci>
-#     <pci busid="0000:3c:00.0" class="0x020000" vendor="0x15b3" device="0x101d">
-#       <!-- Mellanox NIC on this socket -->
-#     </pci>
-#   </cpu>
-# </system>
-
-# NCCL uses topology to minimize cross-rail traffic:
-# Ranks on same node → NVLink (intra-node AllReduce)
-# Ranks on same rail → same fabric path (intra-rack AllReduce)
-# Cross-rack → fabric uplinks
 ```
+
+Example topology file (NCCL XML format):
+
+```XML
+<system>
+  <cpu id="0" affinity="0-23" arch="x86_64" vendor="GenuineIntel">
+    <pci busid="0000:3b:00.0" class="0x030200" vendor="0x10de" device="0x2330">
+      <!-- H100 GPU 0 -->
+    </pci>
+    <pci busid="0000:3c:00.0" class="0x020000" vendor="0x15b3" device="0x101d">
+      <!-- Mellanox NIC on this socket -->
+    </pci>
+  </cpu>
+</system>
+```
+-  NCCL uses topology to minimize cross-rail traffic:
+- Ranks on same node → NVLink (intra-node AllReduce)
+- Ranks on same rail → same fabric path (intra-rack AllReduce)
+- Cross-rack → fabric uplinks
+
 
 ---
 

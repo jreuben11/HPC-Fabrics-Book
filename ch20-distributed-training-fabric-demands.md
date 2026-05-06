@@ -10,11 +10,15 @@
 
 Distributed training frameworks are the software layer that partitions a large model training job across tens, hundreds, or thousands of GPUs. From the application developer's perspective, these frameworks — **PyTorch** Distributed, **DeepSpeed**, **Megatron-LM**, **Horovod**, **Ray** Train — abstract away the complexity of gradient synchronization, model sharding, and inter-node communication. From the network engineer's perspective, they are traffic generators whose output the fabric must sustain at near-line rate, and whose communication patterns determine whether a given fabric topology is the right choice for a given training workload.
 
-The central challenge is that different parallelism strategies produce fundamentally different traffic patterns. Data parallelism (**DDP**, **FSDP**) produces all-to-all AllReduce bursts at every optimizer step — a pattern that rail-optimized fat-tree topologies are designed to absorb efficiently. Pipeline parallelism produces ordered, point-to-point traffic between adjacent model stages — a pattern where cross-rack latency becomes the dominant performance variable. Tensor parallelism produces extremely latency-sensitive AllReduce operations within a small group of GPUs — a pattern so demanding that it is almost always confined to **NVLink** within a single node. Each pattern implies different requirements for bandwidth, latency, loss sensitivity, and topology.
+The central challenge is that different parallelism strategies produce fundamentally different traffic patterns. 
+- **Data parallelism** (**DDP**, **FSDP**) produces all-to-all **AllReduce** bursts at every optimizer step — a pattern that **rail-optimized fat-tree** topologies are designed to absorb efficiently. 
+- **Pipeline parallelism** produces ordered, point-to-point traffic between adjacent model stages — a pattern where **cross-rack latency** becomes the dominant performance variable. 
+- **Tensor parallelism** produces extremely latency-sensitive AllReduce operations within a small group of GPUs — a pattern so demanding that it is almost always **confined to NVLink within a single node**. 
+Each pattern implies different requirements for bandwidth, latency, loss sensitivity, and topology.
 
-Understanding these patterns is not merely academic: it determines which GPU server models to purchase, how many tiers of switching are needed, whether **InfiniBand** or **RoCEv2** is cost-effective for a given workload, whether **RDMA** QP setup overhead matters, and how to configure QoS priority classes so that the right traffic gets the right service. The network engineer who understands parallelism strategies can participate meaningfully in capacity planning, can diagnose training slowdowns by recognizing their network signatures, and can size the storage and training fabrics independently to prevent cross-contamination.
+Understanding these patterns is not merely academic: it determines which GPU server models to purchase, how many tiers of switching are needed, whether **InfiniBand** or **RoCEv2** is cost-effective for a given workload, whether **RDMA** QP setup overhead matters, and how to configure **QoS priority classes** so that the right traffic gets the right service. The network engineer who understands parallelism strategies can participate meaningfully in **capacity planning**, can **diagnose training slowdowns** by recognizing their network signatures, and can size the storage and training fabrics independently to prevent cross-contamination.
 
-This chapter covers the traffic profiles of **DDP**, **FSDP**, pipeline parallelism, tensor parallelism, **DeepSpeed** ZeRO stages, and **Ray** — providing quantitative estimates of message sizes, frequencies, and directional patterns for each. A lab walkthrough then makes these abstractions concrete: two **PyTorch** ranks running on a single CPU machine capture the rendezvous handshake and AllReduce data-plane traffic with **tcpdump**, measure how AllReduce time scales with tensor size, and establish the baseline numbers that make the case for investing in a high-performance training fabric.
+This chapter covers the traffic profiles of **DDP**, **FSDP**, pipeline parallelism, tensor parallelism, **DeepSpeed** **ZeRO** stages, and **Ray** — providing quantitative estimates of message sizes, frequencies, and directional patterns for each. A lab walkthrough then makes these abstractions concrete: two **PyTorch** ranks running on a single CPU machine capture the rendezvous handshake and AllReduce data-plane traffic with **tcpdump**, measure how AllReduce time scales with tensor size, and establish the baseline numbers that make the case for investing in a high-performance training fabric.
 
 This chapter builds directly on Chapter 19 (**NCCL** and collective communications), which covers the transport layer that executes these patterns, and connects forward to Chapter 29 (**Kubernetes** AI scheduling), which determines how these parallel workloads are placed on the fabric. Chapter 18 (distributed storage) addresses the checkpoint write traffic that must not compete with the AllReduce traffic analyzed here.
 
@@ -22,7 +26,7 @@ This chapter builds directly on Chapter 19 (**NCCL** and collective communicatio
 
 ## Installation
 
-**PyTorch** (**torch** and **torchvision**) is the core requirement: even on a CPU-only lab machine using the **gloo** backend, it executes the full **DDP** rendezvous handshake and AllReduce data-plane exchange so that **tcpdump** can capture and measure actual AllReduce traffic at configurable tensor sizes. The **torchrun** launcher is installed as part of the **torch** package and handles the process group initialization and rank assignment that would otherwise require a separate job scheduler, allowing multi-rank experiments to run on a single workstation. **DeepSpeed** is installed to expose the **ZeRO** optimizer stages — **ZeRO**-1, **ZeRO**-2, and **ZeRO**-3 partition the optimizer state, gradients, and parameters respectively, and each stage produces a distinct all-to-all traffic pattern that must be observable on the fabric to size the training network correctly. **Ray** (**ray[train]**) is installed to demonstrate the actor-based communication model used by **Ray** Train, whose object store transfers and parameter server patterns are fundamentally different from the collective-communication model of **DDP** and produce a different mix of point-to-point and broadcast traffic that affects both topology requirements and QoS class assignment.
+**PyTorch** (**torch** and **torchvision**) is the core requirement: even on a CPU-only lab machine using the **gloo** backend, it executes the full **DDP** rendezvous handshake and AllReduce data-plane exchange so that **tcpdump** can capture and measure actual AllReduce traffic at configurable tensor sizes. The **torchrun** launcher is installed as part of the **torch** package and handles the process group initialization and rank assignment that would otherwise require a separate job scheduler, allowing multi-rank experiments to run on a single workstation. **DeepSpeed** is installed to expose the **ZeRO** optimizer stages — **ZeRO**-1, **ZeRO**-2, and **ZeRO**-3 partition the **optimizer state**, **gradients**, and **parameters** respectively, and each stage produces a distinct all-to-all traffic pattern that must be observable on the fabric to size the training network correctly. **Ray** (**ray[train]**) is installed to demonstrate the actor-based communication model used by **Ray** Train, whose object store transfers and parameter server patterns are fundamentally different from the collective-communication model of **DDP** and produce a different mix of point-to-point and broadcast traffic that affects both topology requirements and QoS class assignment.
 
 This chapter's lab runs entirely on a single CPU-only machine using **PyTorch**'s **gloo** backend. No GPUs and no cluster are required.
 
@@ -53,7 +57,7 @@ python -c "import torch; print(torch.__version__); print(torch.distributed.is_av
 ## 20.1 The Network Engineer's View of Training Runtimes
 
 From the fabric's perspective, a distributed training runtime is a traffic generator. The questions that matter are:
-- What communication pattern does it produce? (all-to-all, ring, point-to-point)
+- What communication pattern does it produce? (**all-to-all**, **ring**, **point-to-point**)
 - What volume of traffic per step?
 - What is the message size distribution? (determines transport efficiency)
 - Is the communication overlapped with compute, or does it stall the GPU?
@@ -68,8 +72,8 @@ From the fabric's perspective, a distributed training runtime is a traffic gener
 DDP synchronizes gradients after each backward pass using AllReduce. Every rank sends and receives the full gradient tensor.
 
 **Traffic profile:**
-- **Pattern:** All-to-all (ring-AllReduce or tree-AllReduce via NCCL)
-- **Message size:** Full gradient tensor = 2 × num_params × dtype_bytes
+- **Pattern:** All-to-all (**ring-AllReduce** or **tree-AllReduce** via NCCL)
+- **Message size:** `Full gradient tensor = 2 × num_params × dtype_bytes`
   - GPT-3 175B in bf16: 350 GB per step
 - **Frequency:** Once per optimizer step
 - **Overlap:** DDP buckets gradients and overlaps AllReduce with backward pass — partial overlap of compute and communication
@@ -79,13 +83,13 @@ DDP synchronizes gradients after each backward pass using AllReduce. Every rank 
 
 ### PyTorch FSDP (Fully Sharded Data Parallel)
 
-FSDP shards both model parameters and optimizer state across ranks, reducing per-GPU memory. Before each layer's forward pass, FSDP performs an AllGather to reconstruct the full layer. After backward, it performs a ReduceScatter.
-
+*FSDP shards both model parameters and optimizer state across ranks, reducing per-GPU memory. Before each layer's forward pass, FSDP performs an **AllGather** to reconstruct the full layer. After backward, it performs a **ReduceScatter**.
+*
 **Traffic profile:**
 - **Pattern:** AllGather (before forward) + ReduceScatter (after backward) — functionally equivalent to AllReduce but with intermediate sharding
 - **Message size:** Per-layer, not full model — smaller individual transfers but more frequent
 - **Overlap:** FSDP can prefetch the next layer's parameters while the current layer computes
-- **Fabric implication:** Higher message frequency, smaller average message size than DDP. Transport efficiency is important for small messages — RDMA with low QP (Queue Pair) setup overhead preferred. A QP is the fundamental RDMA communication endpoint: a pair of send and receive queues that must be connected and transitioned to the Ready-to-Receive state before data transfer begins; QP setup adds latency that is significant when individual message sizes are small relative to setup cost.
+- **Fabric implication:** Higher message frequency, smaller average message size than DDP. Transport efficiency is important for small messages — RDMA with low **QP (Queue Pair)** setup overhead preferred. A QP is the fundamental RDMA communication endpoint: a pair of send and receive queues that must be connected and transitioned to the Ready-to-Receive state before data transfer begins; QP setup adds latency that is significant when individual message sizes are small relative to setup cost.
 
 ---
 
@@ -95,7 +99,7 @@ Pipeline parallel splits the model into stages, each on a different set of GPUs.
 
 **Traffic profile:**
 - **Pattern:** Point-to-point between adjacent pipeline stages
-- **Message size:** Activation tensor size = batch_size × seq_len × hidden_dim × dtype_bytes
+- **Message size:** `Activation tensor size = batch_size × seq_len × hidden_dim × dtype_bytes`
   - For GPT-3, hidden_dim=12288, seq_len=2048, bf16: ~400 MB per microbatch
 - **Frequency:** 2× per microbatch (forward activation + backward gradient)
 - **Directional:** Strictly ordered; stage N sends to stage N+1 in forward; N+1 to N in backward
@@ -111,7 +115,7 @@ Tensor parallelism shards individual weight matrices across GPUs within a tensor
 
 **Traffic profile:**
 - **Pattern:** AllReduce within tensor-parallel group after each matrix multiply
-- **Message size:** Activation tensor / TP_degree — typically 10–100 MB
+- **Message size:** `Activation tensor / TP_degree` — typically 10–100 MB
 - **Frequency:** 2× per transformer layer (attention + MLP), per microbatch
 - **Latency sensitivity:** Extremely high — on the critical path of every forward/backward pass
 - **Fabric implication:** Tensor parallelism is almost always confined to NVLink (intra-node) because cross-node latency makes it economically unviable. The network fabric sees tensor-parallel traffic only in NVLink-bridged multi-node configurations.
@@ -120,13 +124,13 @@ Tensor parallelism shards individual weight matrices across GPUs within a tensor
 
 ## 20.5 DeepSpeed ZeRO Stages
 
-DeepSpeed's ZeRO (Zero Redundancy Optimizer) partitions model state across ranks to reduce memory usage. Different stages have different communication profiles:
+DeepSpeed's ZeRO (**Zero Redundancy Optimizer**) partitions model state across ranks to reduce memory usage. Different stages have different communication profiles:
 
 | ZeRO Stage | What's Partitioned | Communication |
 |---|---|---|
-| ZeRO-1 | Optimizer states | AllReduce gradients (= DDP) |
-| ZeRO-2 | + Gradients | ReduceScatter gradients → AllGather params |
-| ZeRO-3 | + Parameters | AllGather params before each forward layer |
+| ZeRO-1 | **Optimizer states** | AllReduce gradients (= DDP) |
+| ZeRO-2 | **+ Gradients** | ReduceScatter gradients → AllGather params |
+| ZeRO-3 | **+ Parameters** | AllGather params before each forward layer |
 
 **Stage 3 traffic profile:**
 - AllGather of each layer's parameters before its forward pass
@@ -134,17 +138,17 @@ DeepSpeed's ZeRO (Zero Redundancy Optimizer) partitions model state across ranks
 - Very high message count (one AllGather + ReduceScatter per layer per step)
 - Individual messages smaller but total volume ≈ DDP
 
-**Fabric implication:** ZeRO-3's fine-grained communication makes it more sensitive to message rate (RDMA QP setup overhead, ACK latency) than to raw bandwidth. DC (Dynamically Connected) QP mode is an InfiniBand transport type that shares a single QP across many remote destinations, dramatically reducing the number of QPs required at scale compared to Reliable Connected (RC) mode — critical when ZeRO-3 is communicating with hundreds of peers simultaneously. UCX's DC transport (Chapter 4) provides the same benefit over RoCEv2. DC QP mode or UCX's DC transport (Chapter 4) is important for ZeRO-3 at scale.
+**Fabric implication:** ZeRO-3's fine-grained communication makes it more sensitive to message rate (RDMA QP setup overhead, ACK latency) than to raw bandwidth. **DC (Dynamically Connected) QP mode** is an InfiniBand transport type that shares a single QP across many remote destinations, dramatically reducing the number of QPs required at scale compared to **Reliable Connected (RC) mode** — critical when ZeRO-3 is communicating with hundreds of peers simultaneously. UCX's **DC transport** (Chapter 4) provides the same benefit over RoCEv2. DC QP mode or UCX's DC transport (Chapter 4) is important for ZeRO-3 at scale.
 
 ---
 
 ## 20.6 Ray — Distributed Task and Object Scheduling
 
-Ray is not primarily a training framework but a general distributed computing framework. In the AI context, Ray Train and Ray Serve are the relevant components.
+Ray is not primarily a training framework but a general distributed computing framework. In the AI context, **Ray Train** and **Ray Serve** are the relevant components.
 
 **Ray's network traffic patterns:**
 
-1. **Object store transfers:** Large tensors (model weights, batches) are stored in Ray's distributed object store (Plasma, backed by shared memory or Apache Arrow). Plasma is Ray's in-memory object store that uses shared memory to allow zero-copy reads by multiple processes on the same node; Apache Arrow is the columnar in-memory data format that Plasma uses to serialize tensors and dataframes efficiently. When an object on node A is needed by a task on node B, Ray transfers it via its own object transfer protocol (not RDMA, not NCCL).
+1. **Object store transfers:** Large tensors (model weights, batches) are stored in Ray's distributed object store (**Plasma**, backed by shared memory or **Apache Arrow**). Plasma is Ray's in-memory object store that uses shared memory to allow zero-copy reads by multiple processes on the same node; Apache Arrow is the columnar in-memory data format that Plasma uses to serialize tensors and dataframes efficiently. When an object on node A is needed by a task on node B, Ray transfers it via its own **object transfer protocol** (not RDMA, not NCCL).
    - Protocol: TCP/gRPC on a dynamic port
    - Fabric implication: Object transfers use the management network; for large models this can saturate a 25GbE management link
 
@@ -176,7 +180,7 @@ A complete port table for training fabric ACLs (Access Control Lists — firewal
 
 ## Lab Walkthrough 20 — Traffic Pattern Analysis with tcpdump and PyTorch Distributed
 
-This walkthrough runs two PyTorch distributed ranks on a single CPU machine using the gloo backend. `gloo` is Facebook's collective communications library that implements AllReduce, AllGather, and barrier over TCP sockets — it works on CPUs without CUDA or RDMA hardware, making it ideal for development and testing. `torchrun` is PyTorch's built-in process launcher that spawns the specified number of worker processes, assigns each a RANK and WORLD_SIZE environment variable, and establishes the rendezvous over the specified master address and port. You will capture the rendezvous handshake and AllReduce traffic on the loopback interface, analyze it with tshark, and measure how AllReduce time scales with tensor size.
+This walkthrough runs two PyTorch distributed ranks on a single CPU machine using the gloo backend. `gloo` is Facebook's collective communications library that implements AllReduce, AllGather, and barrier over TCP sockets — it works on CPUs without CUDA or RDMA hardware, making it ideal for development and testing. `torchrun` is PyTorch's built-in process launcher that spawns the specified number of worker processes, assigns each a `RANK` and `WORLD_SIZE` environment variable, and establishes the rendezvous over the specified master address and port. You will capture the rendezvous handshake and AllReduce traffic on the loopback interface, analyze it with tshark, and measure how AllReduce time scales with tensor size.
 
 ### Step 1: Write the two-rank AllReduce script
 
@@ -255,6 +259,7 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+- note: **HDR (High Data Rate)** is just a marketing term
 
 ### Step 2: Start a tcpdump capture on the loopback interface
 
@@ -297,7 +302,7 @@ On NCCL+InfiniBand HDR, expect ~22 GB/s at 200 Gbps line rate.
 
 > **Note on actual numbers:** The exact timings depend on your machine's available memory bandwidth and scheduler. The key observation is that time scales linearly with size — confirming bandwidth-bound operation, not latency-bound. The 1 MB result may appear disproportionately slow relative to its size because it includes fixed gloo connection setup overhead.
 
-Stop the tcpdump capture with Ctrl-C in the other terminal:
+Stop the tcpdump capture with `Ctrl-C` in the other terminal:
 
 ```
 ^C
@@ -308,7 +313,7 @@ N packets received by filter
 
 ### Step 4: Analyze the capture with tshark
 
-`tshark` is the command-line version of Wireshark — a full network protocol analyzer that reads pcap capture files and can dissect, filter, and extract fields from any protocol it recognizes. It supports the same display filter syntax as Wireshark, making it the standard tool for scripted packet analysis.
+`tshark` is the command-line version of Wireshark — a full network protocol analyzer that reads **pcap capture files** and can dissect, filter, and extract fields from any protocol it recognizes. It supports the same display filter syntax as Wireshark, making it the standard tool for scripted packet analysis.
 
 Inspect the rendezvous handshake on port 29400:
 
@@ -330,8 +335,8 @@ Expected output (IPs will be 127.0.0.1 for loopback):
 ```
 
 What the output shows:
-- The first three lines are the TCP three-way handshake (SYN, SYN-ACK, ACK) on port 29400.
-- The subsequent `AP` (ACK + PUSH) packets carry the rendezvous metadata: rank addresses, collective configuration, and initial barrier synchronization.
+- The first three lines are the TCP three-way handshake (**SYN, SYN-ACK, ACK**) on port 29400.
+- The subsequent `AP` (**ACK + PUSH**) packets carry the rendezvous metadata: rank addresses, collective configuration, and initial barrier synchronization.
 - After the rendezvous completes on port 29400, gloo opens new TCP connections on ephemeral ports for the actual AllReduce data transfer.
 
 To see the data-plane connections as well, capture without the port filter:
