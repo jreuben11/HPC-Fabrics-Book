@@ -10,7 +10,8 @@ A physical GPU on a bare-metal host offers maximum performance: every compute un
 
 This chapter maps the full taxonomy of GPU isolation models, explains the kernel and hardware mechanisms that underpin each one, and gives complete configuration walkthroughs for the options that appear most often in AI infrastructure. The decision matrix in §31.1 is the spine of the chapter — every subsequent section justifies a row in it.
 
-Section 31.2 covers the Linux **VFIO** (**Virtual Function I/O**) subsystem: **IOMMU** groups, the **vfio-pci** driver, the ACS override patch and when it is actually needed, and ROM BAR handling. Section 31.3 translates VFIO into practice with **KVM**/**QEMU** GPU passthrough, including **OVMF** UEFI firmware, huge-page-backed guest RAM, and the `qemu-system-x86_64` device assignment flags. Section 31.4 goes one level up the stack to **libvirt**/**virsh**, covering the `<hostdev>` domain XML element and network backend choices. Section 31.5 covers **Proxmox VE** in depth: PCIe passthrough setup, the `qm` and `pvesh` management CLIs, the Proxmox networking stack, **Corosync** cluster quorum, HA fencing, and **Ceph** RBD storage integration.
+Section 31.2 covers the Linux **VFIO** (**Virtual Function I/O**) subsystem: **IOMMU** groups, the **vfio-pci** driver, the ACS override patch and when it is actually needed, and **ROM BAR** handling. Section 31.3 translates VFIO into practice with **KVM**/**QEMU** GPU passthrough, including **OVMF** UEFI firmware, huge-page-backed guest RAM, and the `qemu-system-x86_64` device assignment flags. Section 31.4 goes one level up the stack to **libvirt**/**virsh**, covering the `<hostdev>` domain XML element and network backend choices. Section 31.5 covers **Proxmox VE** in depth: PCIe passthrough setup, the `qm` and `pvesh` management CLIs, the Proxmox networking stack, **Corosync** cluster quorum, HA fencing, and **Ceph** RBD storage integration.
+- A **ROM BAR (Base Address Register)** in virtualization refers to the PCI Expansion ROM of a device (like a GPU) being mapped into the virtual machine's memory space. It is commonly configured to "off" (<rom bar="off"/>) during GPU passthrough to prevent system hangs, slow boots, or conflicts where the guest OS tries to use the virtualized device's firmware incorrectly.
 
 Sections 31.6 and 31.7 cover the two primary GPU partitioning technologies: **NVIDIA MIG** (**Multi-Instance GPU**), which partitions a single physical GPU into fully isolated hardware slices, and **NVIDIA MPS** (**Multi-Process Service**), which multiplexes CUDA contexts at the software level with shared hardware. Section 31.8 covers **KubeVirt**, the Kubernetes extension that runs VMs as pods, and its GPU passthrough and SR-IOV networking capabilities. Section 31.9 examines networking consequences — particularly why RDMA and **GPUDirect** require careful configuration under each isolation model. The chapter closes with the lab.
 
@@ -62,14 +63,14 @@ Before choosing an isolation model, it helps to understand what exactly is being
 
 | Model | Isolation granularity | HBM sharing | GPUDirect RDMA | Live migration | Best for |
 |---|---|---|---|---|---|
-| Bare metal | None (full GPU per process) | No | Yes (full support) | No | Training, benchmarking |
-| VFIO passthrough | VM boundary (full GPU) | No | Yes (with `nvidia-peermem`/DMA-BUF) | No | Single-tenant GPU VMs |
-| NVIDIA vGPU | Time-sliced or MIG-backed vGPU | Time-slice | No (vGPU abstractions break P2P) | Yes (licensed) | VDI, inference |
-| AMD MxGPU | SR-IOV VF (hardware) | No | Limited | Yes | Multi-tenant inference VMs |
-| NVIDIA MIG | HW-partitioned slice (GI+CI) | No | Yes (per-slice) | No | Multi-tenant training, inference |
-| NVIDIA MPS | Shared SM context, soft limits | Yes (shared heap) | Yes (same physical GPU) | No | MPI jobs, inference batching |
-| Container (device plugin) | cgroup/namespace | Shared by default | Yes | N/A | Standard Kubernetes GPU pods |
-| KubeVirt + passthrough | VM boundary inside Kubernetes | No | Yes (same as passthrough) | No | GPU VMs in Kubernetes |
+| **Bare metal** | None (full GPU per process) | No | Yes (full support) | No | Training, benchmarking |
+| **VFIO passthrough** | VM boundary (full GPU) | No | Yes (with `nvidia-peermem`/DMA-BUF) | No | Single-tenant GPU VMs |
+| **NVIDIA vGPU** | Time-sliced or MIG-backed vGPU | Time-slice | No (vGPU abstractions break P2P) | Yes (licensed) | VDI, inference |
+| **AMD MxGPU** | SR-IOV VF (hardware) | No | Limited | Yes | Multi-tenant inference VMs |
+| **NVIDIA MIG** | HW-partitioned slice (GI+CI) | No | Yes (per-slice) | No | Multi-tenant training, inference |
+| **NVIDIA MPS** | Shared SM context, soft limits | Yes (shared heap) | Yes (same physical GPU) | No | MPI jobs, inference batching |
+| **Container (device plugin)** | cgroup/namespace | Shared by default | Yes | N/A | Standard Kubernetes GPU pods |
+| **KubeVirt + passthrough** | VM boundary inside Kubernetes | No | Yes (same as passthrough) | No | GPU VMs in Kubernetes |
 
 **Key insight**: As isolation increases from container → MPS → MIG → passthrough, per-workload performance guarantees improve but resource sharing efficiency decreases and RDMA/GPUDirect capabilities become more constrained. Workloads that require the full GPUDirect peer-to-peer path (§31.9) must use bare-metal, MIG (within a slice), or VFIO passthrough — not vGPU.
 
@@ -77,7 +78,7 @@ Before choosing an isolation model, it helps to understand what exactly is being
 
 ## 31.2 VFIO and IOMMU: The Kernel Foundation
 
-**VFIO** (Virtual Function I/O) is the Linux kernel subsystem that enables safe, user-space-controlled device assignment. It exposes physical PCIe devices to user-space programs (typically QEMU/KVM guests) through a character device interface, while relying on the platform **IOMMU** to prevent the assigned device from performing unauthorized DMA into host memory.
+**VFIO** (**Virtual Function I/O**) is the Linux kernel subsystem that enables safe, user-space-controlled device assignment. It exposes physical PCIe devices to user-space programs (typically **QEMU/KVM** guests) through a character device interface, while relying on the platform **IOMMU** to prevent the assigned device from performing unauthorized DMA into host memory.
 
 ### 31.2.1 IOMMU Groups
 
@@ -100,7 +101,7 @@ Ideal IOMMU group structure puts the GPU (slot 0) and its audio function (slot 1
 
 ### 31.2.2 ACS Override Patch
 
-**ACS** (Access Control Services) is the PCIe mechanism that gates peer-to-peer DMA between devices in the same hierarchy. When ACS is disabled or absent on an intermediate switch, all endpoints behind that switch share one IOMMU group — making isolated passthrough impossible without moving devices.
+**ACS** (**Access Control Services**) is the PCIe mechanism that gates peer-to-peer DMA between devices in the same hierarchy. When ACS is disabled or absent on an intermediate switch, all endpoints behind that switch share one IOMMU group — making isolated passthrough impossible without moving devices.
 
 The **ACS override patch** (originally by Alex Williamson) is an out-of-tree kernel patch that forces every PCIe device into its own IOMMU group by lying to the kernel about ACS capability. It is available in some distribution kernels (Proxmox's `pve-kernel` includes it; the Arch Linux AUR `linux-vfio` package applies it) but has never been accepted upstream.
 
@@ -131,7 +132,7 @@ lspci -k -s 01:00.0
 # Kernel driver in use: vfio-pci
 ```
 
-For persistent binding across reboots, use the kernel cmdline approach (boot-time binding is more reliable than initramfs scripts for GPU passthrough):
+For persistent binding across reboots, use the kernel cmdline approach (boot-time binding is more reliable than **initramfs** scripts for GPU passthrough):
 
 ```bash
 # /etc/default/grub — add to GRUB_CMDLINE_LINUX_DEFAULT:
@@ -147,7 +148,7 @@ The `iommu=pt` (passthrough) flag instructs the IOMMU to use identity mappings f
 
 ### 31.2.4 ROM BAR Issues
 
-Some GPUs — particularly consumer NVIDIA cards — have VBIOS ROMs that are locked or that the PCI ROM BAR exposes in a form QEMU cannot read at runtime. The symptom is a blank screen in the guest or a QEMU error like `romfile: file not found` or EFI not recognizing the GPU.
+Some GPUs — particularly consumer NVIDIA cards — have **VBIOS** ROMs that are locked or that the PCI ROM BAR exposes in a form QEMU cannot read at runtime. The symptom is a blank screen in the guest or a QEMU error like `romfile: file not found` or EFI not recognizing the GPU.
 
 The standard workaround is to dump the ROM directly from the host before binding to `vfio-pci`:
 
@@ -159,7 +160,7 @@ echo 0 | sudo tee /sys/bus/pci/devices/0000:01:00.0/rom
 sudo cp /tmp/gpu.rom /usr/share/kvm/gpu.rom
 ```
 
-In QEMU/libvirt the ROM is then passed explicitly (`romfile=gpu.rom`), bypassing the runtime read entirely (§31.3).
+In **QEMU/libvirt** the ROM is then passed explicitly (`romfile=gpu.rom`), bypassing the runtime read entirely (§31.3).
 
 ---
 
@@ -169,7 +170,7 @@ In QEMU/libvirt the ROM is then passed explicitly (`romfile=gpu.rom`), bypassing
 
 ### 31.3.1 OVMF UEFI Firmware
 
-**OVMF** (**Open Virtual Machine Firmware**) is an UEFI firmware implementation for QEMU. Modern NVIDIA GPUs require UEFI boot for proper operation — SeaBIOS lacks the EFI GOP (Graphics Output Protocol) initialization that the driver expects. OVMF is required for GPU passthrough on any GPU released after 2016.
+**OVMF** (**Open Virtual Machine Firmware**) is an UEFI firmware implementation for QEMU. Modern NVIDIA GPUs require **UEFI boot** for proper operation — **SeaBIOS** (the default BIOS for qemu and kvm https://seabios.org/ ) lacks the **EFI GOP (Graphics Output Protocol)** initialization that the driver expects. OVMF is required for GPU passthrough on any GPU released after 2016.
 
 ```bash
 sudo apt install -y ovmf
@@ -181,7 +182,7 @@ Use the `_4M` variants for modern VMs — they include support for secure boot a
 
 ### 31.3.2 Huge-Page-Backed Guest RAM
 
-Allocating guest RAM on 1 GiB huge pages eliminates TLB pressure from the second-level address translation (EPT/NPT) that KVM performs on every guest memory access. For GPU workloads that pin large contiguous memory regions (CUDA allocations, DMA buffers), the performance improvement from huge pages is typically 1–3% on memory-intensive benchmarks.
+Allocating guest RAM on 1 GiB huge pages eliminates **TLB pressure** from the second-level address translation (**EPT/NPT**) that KVM performs on every guest memory access. For GPU workloads that pin large contiguous memory regions (CUDA allocations, DMA buffers), the performance improvement from huge pages is typically 1–3% on memory-intensive benchmarks.
 
 ```bash
 # Reserve 64 × 1 GiB hugepages (for a 64 GiB guest)
@@ -232,7 +233,7 @@ Key flags:
 
 ## 31.4 libvirt/virsh: XML-Based GPU Passthrough
 
-**libvirt** is the standard management API layer above QEMU/KVM. It stores VM configuration as XML domain definitions and exposes a unified API consumed by virt-manager, Proxmox, and OpenStack. **virsh** is its command-line client.
+**libvirt** is the standard management API layer above QEMU/KVM. It stores VM configuration as XML domain definitions and exposes a unified API consumed by **virt-manager**, **Proxmox**, and **OpenStack**. `virsh` is its command-line client.
 
 ### 31.4.1 Detaching the Device from the Host
 
@@ -309,9 +310,9 @@ libvirt supports three network backends for GPU VMs, each with different perform
 
 | Backend | `<interface type>` | Performance | RDMA support | Notes |
 |---|---|---|---|---|
-| Linux bridge | `bridge` | Good | No (software path) | Default; simple; shares host bridge |
-| macvtap | `direct` | Better | No | Direct NIC attachment; bypasses host bridge |
-| SR-IOV VF direct | `hostdev` (type='pci') | Near-line-rate | Yes (with RDMA NIC VF) | See §31.9; requires RDMA NIC with SR-IOV |
+| **Linux bridge** | `bridge` | Good | No (software path) | Default; simple; shares host bridge |
+| **macvtap** | `direct` | Better | No | Direct NIC attachment; bypasses host bridge |
+| **SR-IOV VF direct** | `hostdev` (type='pci') | Near-line-rate | Yes (with RDMA NIC VF) | See §31.9; requires RDMA NIC with SR-IOV |
 
 For GPU VMs that need **GPUDirect RDMA**, SR-IOV VF direct assignment is the only viable option (*see Chapter 13 for VF provisioning details*).
 
@@ -319,7 +320,7 @@ For GPU VMs that need **GPUDirect RDMA**, SR-IOV VF direct assignment is the onl
 
 ## 31.5 Proxmox VE: GPU Passthrough in Production
 
-**Proxmox VE** (**PVE**) is an open-source server virtualization platform that combines KVM/QEMU and LXC containers under a unified web UI, REST API (`pvesh`), and CLI (`qm`, `pveceph`, `pvecm`). Version 8.x ships with a 6.8.x PVE kernel that includes the ACS override patch and VFIO modules pre-integrated.
+**Proxmox VE** (**PVE**) is an open-source server virtualization platform that combines KVM/QEMU and **LXC** containers under a unified web UI, REST API (`pvesh`), and CLI (`qm`, `pveceph`, `pvecm`). Version 8.x ships with a 6.8.x PVE kernel that includes the ACS override patch and VFIO modules pre-integrated.
 
 ### 31.5.1 IOMMU and VFIO Kernel Setup
 
@@ -435,7 +436,7 @@ Proxmox VE supports three network modes for VMs:
 
 ### 31.5.5 Corosync Cluster Quorum and HA
 
-**Corosync** is the distributed membership and messaging daemon that underpins Proxmox cluster state. All cluster nodes share the Proxmox cluster filesystem (`pmxcfs`) replicated over Corosync. Quorum requires more than half the nodes to agree — a 3-node cluster tolerates one failure.
+**Corosync** is the distributed membership and messaging daemon that underpins Proxmox cluster state. Note: ProxMox does not use **PaceMaker**! All cluster nodes share the Proxmox cluster filesystem (`pmxcfs`) replicated over Corosync. Quorum requires more than half the nodes to agree — a 3-node cluster tolerates one failure.
 
 ```bash
 # Initialize cluster (on first node)
@@ -652,7 +653,7 @@ For inference workloads where each MIG slice serves an independent model shard, 
 
 ### 31.7.1 CUDA Context Sharing Model
 
-Without MPS, each CUDA process gets its own context, and the GPU's context switch overhead (10s of microseconds) serializes access. With MPS, all client processes connect through a single **nvidia-cuda-mps-server** process that presents one unified context to the hardware. Kernel launches from multiple clients are queued together and executed concurrently on the SM array.
+Without MPS, each CUDA process gets its own context, and the GPU's context switch overhead (**10s of microseconds**) serializes access. With MPS, all client processes connect through a single **nvidia-cuda-mps-server** process that presents one unified context to the hardware. Kernel launches from multiple clients are queued together and executed concurrently on the SM array.
 
 This is most valuable for small-batch inference (many concurrent requests, each using a fraction of the SMs) and MPI training runs where 8 ranks share one GPU (common in CPU-limited HPC codes ported to GPU). It is counterproductive for large training jobs where each rank already fully occupies the GPU.
 
@@ -740,7 +741,7 @@ sudo nvidia-smi -i 0 -c DEFAULT
 KubeVirt introduces three key CRDs:
 - `VirtualMachine` (VM): desired state with start/stop lifecycle management
 - `VirtualMachineInstance` (VMI): the running instance; created by the VM controller
-- `DataVolume` (DV): CDI (Containerized Data Importer) resource for VM disk provisioning
+- `DataVolume` (DV): **CDI (Containerized Data Importer)** resource for VM disk provisioning
 
 **virtctl** is the KubeVirt CLI that extends `kubectl` for VM operations:
 
@@ -881,7 +882,7 @@ The `NetworkAttachmentDefinition` `sriov-rdma-net` is created by the SR-IOV Netw
 
 Live migration with VFIO-assigned devices (both GPU passthrough via `devices.gpus` and SR-IOV NIC via `sriov: {}`) is **not possible** in current KubeVirt versions. VFIO assignment transfers device state into the guest's address space in a way that cannot be extracted and replicated to a destination host. Attempting to migrate a VMI with assigned devices will fail:
 
-```
+```bash
 virtctl migrate gpu-vm
 # Error: LiveMigration is not permitted for VMI gpu-vm with assigned host devices
 ```
@@ -908,7 +909,7 @@ Two kernel-level implementations exist:
 
 ```bash
 # Load nvidia-peermem (legacy, pre-5.12 kernels or explicit requirement)
-sudo modprobe nvidia-peermem
+# sudo modprobe nvidia-peermem
 
 # Verify DMA-BUF peer support (modern kernels)
 nvidia-smi | grep -i "DMA"

@@ -7,6 +7,9 @@
 ## Introduction
 
 **Kubernetes** was designed as an extensible platform, not a fixed product. Its designers anticipated that operators, CNI plugins, storage drivers, hardware accelerators, and custom routing controllers would all need first-class integration — not hacks. The result is a collection of well-defined extension points: binary API contracts for network attachment (**CNI**), hardware device exposure (**Device Plugin API**), block and file storage (**CSI**), runtime shim selection (**CRI**), declarative application controllers (**Operators**), and structured L4/L7 ingress (**Gateway API**). Together these extension points define the seams through which AI infrastructure — GPUs, InfiniBand NICs, RDMA device plugins, custom schedulers, and inference serving endpoints — is integrated into the Kubernetes control plane.
+- **CRI - Container Runtime Interface**: Connects the **kubelet** to container runtimes (like **Containerd** or **CRI-O**) to pull images and run containers.
+- **CNI - Container Network Interface**: Manages networking for Pods, assigning IP addresses and setting up connectivity.
+- **CSI - Container Storage Interface**: Manages persistent storage, allowing Kubernetes to mount external storage volumes to containers
 
 This chapter provides a deep technical walkthrough of the extension points most relevant to AI cluster networking, with particular emphasis on the four that require custom implementation work: **CNI** plugins (network attachment), the **Device Plugin API** (hardware exposure), **Operator SDK** / **controller-runtime** (control-plane automation), and **Gateway API** (structured ingress/egress routing). **CRI** and **CSI** receive shorter orientation treatments, as their AI relevance is covered in the storage chapters. The chapter concludes with a design walkthrough of a `RDMANetwork` operator that ties all four active extension points together, and a lab that exercises the complete stack on a local **Kind** cluster.
 
@@ -127,7 +130,7 @@ The CNI_COMMAND environment variable selects the operation. The kubelet passes:
 | `CNI_ARGS` | Semicolon-separated key=value pairs from the runtime |
 | `CNI_PATH` | Colon-separated directories to search for plugin binaries |
 
-**ADD**: Create the interface inside the container namespace, configure IP addressing (possibly via an IPAM sub-plugin), install routes, and return a result JSON object on stdout.
+**ADD**: Create the interface inside the container namespace, configure IP addressing (possibly via an **IPAM (IP Address Management)** sub-plugin), install routes, and return a result JSON object on stdout.
 
 **DEL**: Tear down the network attachment. DEL must be idempotent — if the attachment was never created or was already deleted, DEL must return success.
 
@@ -539,7 +542,7 @@ The kubelet will call `Allocate` and inject `WIDGET_IDS` into the container envi
 
 ### Why Operators Exist
 
-Kubernetes CRUD operations — `kubectl apply`, `kubectl delete` — are sufficient for stateless applications. But AI infrastructure components (GPU device plugins, SR-IOV Virtual Function pools, network topology databases) have operational logic that requires ongoing reconciliation: if a node is added, VFs must be provisioned; if a NetworkAttachmentDefinition is deleted, the device plugin config must be updated. **Operators** encode this operational knowledge in a controller that watches Kubernetes resources and continuously reconciles observed state to desired state.
+Kubernetes CRUD operations — `kubectl apply`, `kubectl delete` — are sufficient for stateless applications. But AI infrastructure components (GPU device plugins, SR-IOV Virtual Function pools, network topology databases) have operational logic that requires ongoing reconciliation: if a node is added, VFs must be provisioned; if a `NetworkAttachmentDefinition` is deleted, the device plugin config must be updated. **Operators** encode this operational knowledge in a controller that watches Kubernetes resources and continuously reconciles observed state to desired state.
 
 The **Operator SDK** (from Red Hat / Operator Framework) scaffolds Go operators using **controller-runtime** (`sigs.k8s.io/controller-runtime`), which provides the reconcile loop, client caching, leader election, and metrics instrumentation. The SDK adds code generation, OLM packaging, and scorecard testing on top.
 

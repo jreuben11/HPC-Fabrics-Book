@@ -6,13 +6,13 @@
 
 ## Introduction
 
-**Kubernetes** was built for stateless microservices that can be scheduled independently, spread for availability, and bin-packed by CPU and memory. Distributed AI training jobs violate every one of those assumptions. They require all ranks to be running simultaneously before any can make progress (gang scheduling), they are topology-sensitive to the point where a single rack boundary can add 40% overhead to pipeline-parallel training (topology awareness), and their resource requirements — typically 8 GPUs per pod, hundreds of pods per job — make fragmentation a default state rather than an edge case. This chapter explains what breaks and how to fix it.
+**Kubernetes** was built for stateless microservices that can be scheduled independently, spread for availability, and bin-packed by CPU and memory. Distributed AI training jobs violate every one of those assumptions. They require all ranks to be running simultaneously before any can make progress (**gang scheduling**), they are topology-sensitive to the point where a single rack boundary can add 40% overhead to pipeline-parallel training (topology awareness), and their resource requirements — typically 8 GPUs per pod, hundreds of pods per job — make fragmentation a default state rather than an edge case. This chapter explains what breaks and how to fix it.
 
 The chapter opens with the failure modes (§29.1) and the core concept of gang scheduling (§29.2), establishing the vocabulary of `PodGroup`, `minMember`, starvation, and deadlock. From there it covers three **Kubernetes**-native scheduling systems: **Volcano** (§29.3), the dominant production gang scheduler that introduces `Queue`, `PodGroup`, and `Job` CRDs along with **DRF**-based fairness and preemption; **Kueue** (§29.4), which acts as an admission controller above the default scheduler, managing quota without replacing it; and **Coscheduler** (§29.5), which implements gang scheduling as a `kube-scheduler` plugin for environments that want gang guarantees without deploying a separate scheduler binary.
 
 Sections 29.6 and 29.7 move from scheduling policy to physical consequences. Topology-aware scheduling using `topologySpreadConstraints` and **NUMA** affinity keeps AllReduce traffic within a rack, eliminating spine traversal that can add 3µs per hop to collective latency. The quantitative analysis in §29.7 shows that for high-frequency pipeline-parallel communications with small tensors, cross-rack placement can increase collective overhead by 40–50%. Section 29.8 builds out the operational policy layer: priority classes, preemption order, and multi-team quota management.
 
-Section 29.9 extends beyond pure **Kubernetes** to the three additional scheduling systems that dominate real AI infrastructure: **SLURM** for HPC-origin **MPI** workloads where topology-aware allocation is expressed through `topology.conf` and `--switches`; **RunAI** for GPU utilization governance with its Projects and Departments quota model; and **NVIDIA Dynamo** for disaggregated prefill-decode inference serving at scale, where the performance-critical path is the KV cache **RDMA** transfer between prefill and decode workers.
+Section 29.9 extends beyond pure **Kubernetes** to the three additional scheduling systems that dominate real AI infrastructure: **SLURM** for HPC-origin **MPI** workloads where topology-aware allocation is expressed through `topology.conf` and `--switches`; **RunAI** for GPU utilization governance with its `Projects` and `Departments` quota model; and **NVIDIA Dynamo** for disaggregated prefill-decode inference serving at scale, where the performance-critical path is the KV cache **RDMA** transfer between prefill and decode workers.
 
 This chapter connects directly to Chapter 2 (**RoCEv2** fabric bandwidth that makes rank placement performance-critical), Chapter 12 (**Cilium** CNI that provides pod networking within which **NCCL** operates), Chapter 13 (**SR-IOV** and the NVIDIA GPU device plugin that exposes GPUs to pods), and Chapter 27 (adaptive routing that determines how cross-rack traffic is handled when topology-constrained placement is not possible).
 
@@ -320,7 +320,7 @@ When a Job is created in namespace `team-a` with label `kueue.x-k8s.io/queue-nam
 
 ## 29.5 Coscheduler — Gang Scheduling as a Scheduler Plugin
 
-The `scheduler-plugins` project (sig-scheduling) implements gang scheduling as an in-tree plugin for `kube-scheduler` rather than a replacement scheduler. This means all other scheduling features — affinity, taints, topology spread — continue to work transparently.
+The `scheduler-plugins` project (**sig-scheduling**) implements gang scheduling as an in-tree plugin for `kube-scheduler` rather than a replacement scheduler. This means all other scheduling features — affinity, taints, topology spread — continue to work transparently.
 
 ### Architecture Difference from Volcano
 
@@ -359,7 +359,7 @@ metadata:
 
 ### NUMA Awareness
 
-The Linux kubelet's CPU Manager and Memory Manager enforce NUMA locality at the node level. For GPU training pods, the relevant NUMA domain is the one containing both the GPU and the NIC (to minimize PCIe hop count for GPUDirect RDMA):
+The Linux **kubelet**'s CPU Manager and Memory Manager enforce NUMA locality at the node level. For GPU training pods, the relevant NUMA domain is the one containing both the GPU and the NIC (to minimize PCIe hop count for GPUDirect RDMA):
 
 ```yaml
 # node-level kubelet config
@@ -426,7 +426,7 @@ spec:
 
 ### How Pod Placement Determines AllReduce Ring Topology
 
-NCCL builds an AllReduce ring (or tree) by ordering ranks according to the physical network topology. If ranks 0–3 are on the same node and ranks 4–7 are on the same node but different from ranks 0–3, NCCL will construct intra-node rings using NVLink (fast) and inter-node rings using RoCE/IB (slower). The ring order is:
+NCCL builds an AllReduce ring (or tree) by ordering ranks according to the physical network topology. If ranks 0–3 are on the same node and ranks 4–7 are on the same node but different from ranks 0–3, NCCL will construct **intra-node rings** using NVLink (fast) and **inter-node rings** using RoCE/IB (slower). The ring order is:
 
 ```
 Node A:  rank0 → rank1 → rank2 → rank3 → (RoCE link) → Node B: rank4 → rank5 → rank6 → rank7 → (RoCE link) → Node A
@@ -541,7 +541,7 @@ Kubernetes-native schedulers (Volcano, Kueue, Coscheduler) excel at multi-tenant
 
 ### 29.9.1 SLURM — HPC Workload Manager
 
-**SLURM** (Simple Linux Utility for Resource Management) is the dominant scheduler in supercomputing. Virtually every HPC center, and many hyperscaler AI training clusters, runs SLURM. Understanding it is mandatory for engineers who need to co-locate Kubernetes and HPC workloads or migrate MPI/PyTorch jobs between environments.
+**SLURM** (**Simple Linux Utility for Resource Management**) is the dominant scheduler in supercomputing. Virtually every HPC center, and many hyperscaler AI training clusters, runs SLURM. Understanding it is mandatory for engineers who need to co-locate Kubernetes and HPC workloads or migrate MPI/PyTorch jobs between environments.
 
 **Architecture**
 
@@ -556,7 +556,7 @@ slurmctld  ─────────── slurmd (node-001)
 
 **GPU allocation with GRES**
 
-SLURM models GPUs as Generic Resources (GRES). The `gres.conf` file on each node declares the hardware; job scripts request it with `--gres`:
+SLURM models **GPUs as Generic Resources (GRES)**. The `gres.conf` file on each node declares the hardware; job scripts request it with `--gres`:
 
 ```bash
 # /etc/slurm/gres.conf (on each GPU node)
@@ -589,7 +589,7 @@ sbatch --nodes=16 --switches=1 train.sh
 
 **PMIx integration (cross-reference Ch. 4)**
 
-SLURM uses PMIx (Process Management Interface for Exascale) — a standardized API for bootstrapping and coordinating MPI and collective communication libraries across cluster nodes — to bootstrap MPI and collective communication libraries. When `srun` launches a PyTorch DDP job, SLURM sets `RANK`, `WORLD_SIZE`, `MASTER_ADDR`, and `MASTER_PORT` via PMIx; the training script reads them without any cluster-specific code. See §4.3 for the full PMIx wire protocol.
+SLURM uses **PMIx (Process Management Interface for Exascale)** — a standardized API for bootstrapping and coordinating MPI and collective communication libraries across cluster nodes — to bootstrap MPI and collective communication libraries. When `srun` launches a PyTorch DDP job, SLURM sets `RANK`, `WORLD_SIZE`, `MASTER_ADDR`, and `MASTER_PORT` via PMIx; the training script reads them without any cluster-specific code. See §4.3 for the full PMIx wire protocol.
 
 **Container jobs: Pyxis + Enroot**
 
@@ -627,7 +627,7 @@ srun python3 train.py --nnodes=4 --nproc_per_node=8
 
 ### 29.9.2 RunAI — GPU Scheduling Platform
 
-**RunAI** is a Kubernetes-native GPU scheduling and orchestration platform. It extends kube-scheduler with a proprietary bin-packing and fairness algorithm, adds a governance layer (Projects and Departments), and provides a workload management UI tuned for ML teams.
+**RunAI** is a Kubernetes-native GPU scheduling and orchestration platform. It extends **kube-scheduler** with a proprietary bin-packing and fairness algorithm, adds a governance layer (**Projects** and **Departments**), and provides a workload management UI tuned for ML teams.
 
 **Architecture**
 
@@ -679,7 +679,7 @@ runai top node
 
 **GPU sharing features**
 
-RunAI supports sub-GPU allocation via its fractional GPU feature (time-slicing or MIG-backed) and dynamic GPU memory limits, enabling inference and development workloads to share nodes with training jobs without wasting idle GPU cycles. MIG (Multi-Instance GPU) is an NVIDIA A100/H100 hardware feature that partitions a single GPU into up to seven independent GPU instances, each with isolated memory and compute slices, enabling multiple workloads to run on one physical GPU with hard performance isolation.
+RunAI supports sub-GPU allocation via its **fractional GPU feature (time-slicing or MIG-backed)** and **dynamic GPU memory limits**, enabling inference and development workloads to share nodes with training jobs without wasting idle GPU cycles. MIG (Multi-Instance GPU) is an NVIDIA A100/H100 hardware feature that partitions a single GPU into up to seven independent GPU instances, each with isolated memory and compute slices, enabling multiple workloads to run on one physical GPU with hard performance isolation.
 
 ```bash
 # Inference workload requesting 0.25 GPU
@@ -725,7 +725,7 @@ KV cache store     — shared distributed KV cache (RDMA or NVLink transfer)
 Planner            — monitors GPU utilization, scales workers, migrates KV blocks
 ```
 
-`vLLM` is a high-throughput LLM inference serving library that implements PagedAttention (efficient KV cache memory management) and continuous batching, making it the dominant open-source inference engine for per-token-optimized GPU serving.
+`vLLM` is a high-throughput LLM inference serving library that implements **PagedAttention** (efficient KV cache memory management) and continuous batching, making it the dominant open-source inference engine for per-token-optimized GPU serving.
 
 **Deployment on Kubernetes**
 
@@ -775,7 +775,7 @@ spec:
     grove.nvidia.com/kv-peer: "decode-worker-0"
 ```
 
-Grove queries the cluster topology graph (populated via DCGM — NVIDIA's Data Center GPU Manager, which exposes per-GPU health metrics, topology, and utilization via a Kubernetes device plugin and Prometheus exporter — and network discovery) and ensures that prefill and decode worker pairs are placed to minimize KV transfer latency — on the same NVLink domain if possible, or on the same RDMA rail if cross-node transfer is unavoidable.
+Grove queries the cluster topology graph (populated via **DCGM** — NVIDIA's Data Center GPU Manager, which exposes per-GPU health metrics, topology, and utilization via a Kubernetes device plugin and Prometheus exporter — and network discovery) and ensures that prefill and decode worker pairs are placed to minimize KV transfer latency — on the same NVLink domain if possible, or on the same RDMA rail if cross-node transfer is unavoidable.
 
 ---
 

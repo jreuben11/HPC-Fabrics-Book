@@ -6,9 +6,9 @@
 
 ## Introduction
 
-**IPv4** address exhaustion is not a distant concern for AI infrastructure engineers — it is an immediate, operational problem. A 10,000-GPU cluster with dual-port NICs consumes 20,000 host addresses before storage, management, BMCs, and **Kubernetes** pod CIDRs are accounted for. A single /16 **IPv4** block, historically considered generous for a datacenter, is simply too small. And the workaround — **NAT** — is incompatible with **RDMA**: **RoCEv2** and **InfiniBand** use memory registrations tied to actual IP addresses, and **NAT** breaks the transport by hiding those addresses from the remote peer.
+**IPv4** address exhaustion is not a distant concern for AI infrastructure engineers — it is an immediate, operational problem. A 10,000-GPU cluster with dual-port NICs consumes 20,000 host addresses before storage, management, BMCs, and **Kubernetes** pod **CIDR**s are accounted for. A single /16 **IPv4** block, historically considered generous for a datacenter, is simply too small. And the workaround — **NAT** — is incompatible with **RDMA**: **RoCEv2** and **InfiniBand** use memory registrations tied to actual IP addresses, and **NAT** breaks the transport by hiding those addresses from the remote peer.
 
-**IPv6** was designed for this scale. A single /48 prefix, the standard site allocation, provides 65,536 /64 subnets. A /64 subnet supports 2^64 host addresses with **SLAAC** — Stateless Address Autoconfiguration — eliminating DHCP for link addresses. Every GPU node, every switch loopback, every pod gets a globally unique routable address, and **RDMA**, **NCCL**, and storage protocols see the actual peer address end-to-end with no translation in the path.
+**IPv6** was designed for this scale. A single ` ` prefix, the standard site allocation, provides 65,536 /64 subnets. A /64 subnet supports 2^64 host addresses with **SLAAC** — **Stateless Address Autoconfiguration** — eliminating DHCP for link addresses. Every GPU node, every switch loopback, every pod gets a globally unique routable address, and **RDMA**, **NCCL**, and storage protocols see the actual peer address end-to-end with no translation in the path.
 
 This chapter covers the full deployment of **IPv6** in an AI cluster fabric, working from first principles. Section 30.1 explains the motivating factors — address exhaustion, **NAT** incompatibility, and **SLAAC** simplicity. Section 30.2 establishes the addressing hierarchy (/48 site → /52 pod → /56 rack → /64 link → /128 loopback) that makes subnetting mechanical rather than a planning exercise. Sections 30.3–30.6 are hands-on: dual-stack **BGP** with **FRR** using **MP-BGP** address families, **EVPN**/**VXLAN** with **IPv6** Type 2 and Type 5 routes, **Cilium** dual-stack CNI configuration, and **SR Linux**'s per-subinterface **IPv6** model. Section 30.7 covers the operational gotchas unique to **IPv6** in AI clusters: **RoCEv2**'s 40-byte GRH overhead and the MTU 9040 adjustment, PTP multicast group changes, and the `NCCL_SOCKET_IFNAME`/`GLOO_SOCKET_IFNAME` interface selection problem that causes silent **IPv4** fallback.
 
@@ -50,7 +50,7 @@ IPv6 eliminates NAT. Every endpoint has a globally unique, routable address. RDM
 
 ### 30.1.4 SLAAC — Stateless Address Autoconfiguration
 
-SLAAC allows a host to configure its own IPv6 address from a Router Advertisement (RA) prefix without DHCP. The host derives a 64-bit Interface Identifier (IID) from its MAC address using EUI-64 — a standard method that inserts `ff:fe` in the middle of the 48-bit MAC and flips the universal/local bit to produce a 64-bit identifier — or a privacy-stable algorithm, appends it to the /64 prefix from the RA, and begins using the resulting address immediately.
+SLAAC allows a host to configure its own IPv6 address from a **Router Advertisement (RA)** prefix without DHCP. The host derives a 64-bit **Interface Identifier (IID)** from its MAC address using **EUI-64** — a standard method that inserts `ff:fe` in the middle of the 48-bit MAC and flips the universal/local bit to produce a 64-bit identifier — or a privacy-stable algorithm, appends it to the /64 prefix from the RA, and begins using the resulting address immediately.
 
 In AI cluster fabrics, SLAAC is valuable for:
 - **Management fabric:** BMCs, out-of-band switches, and management nodes auto-configure on day zero without a DHCP server.
@@ -323,7 +323,7 @@ sudo vtysh -c "show bgp l2vpn evpn route type prefix"
 
 ### 30.4.3 Symmetric IRB with IPv6
 
-IRB (Integrated Routing and Bridging) is the technique of combining L2 bridging and L3 routing at the same VTEP, allowing it to route between VXLAN-bridged segments without hairpinning traffic to a dedicated router. Symmetric IRB routes traffic through the VTEP's IP-VRF in both the ingress and egress directions, meaning both the source and destination VTEPs perform a VRF lookup:
+**IRB (Integrated Routing and Bridging)** is the technique of combining L2 bridging and L3 routing at the same VTEP, allowing it to route between VXLAN-bridged segments without hairpinning traffic to a dedicated router. Symmetric IRB routes traffic through the VTEP's IP-VRF in both the ingress and egress directions, meaning both the source and destination VTEPs perform a VRF lookup:
 
 ```
 Symmetric IRB packet flow (IPv6):

@@ -8,7 +8,7 @@
 
 Distributed training jobs fail differently from web services. A web service can tolerate one backend going down because requests are independent — the load balancer simply stops sending traffic to the failed backend. A training job is a single synchronous computation spread across hundreds of GPUs, and every rank must complete every AllReduce before any rank can advance. When one rank's network link fails, every other rank blocks. When all ranks block, the entire cluster's GPU time is wasted until either the job dies or a watchdog fires.
 
-This chapter builds a complete fault-tolerance stack for AI network fabrics, working layer by layer from the physical link to the training framework. The starting point is the threat model (§28.1): understanding exactly how network faults translate into job failures, why the default timeout intervals are catastrophically long for GPU clusters, and what the three failure modes are — **RDMA** QP retry exhaustion, AllReduce barrier hang, and checkpoint corruption — and how they interact.
+This chapter builds a complete fault-tolerance stack for AI network fabrics, working layer by layer from the physical link to the training framework. The starting point is the threat model (§28.1): understanding exactly how network faults translate into job failures, why the default timeout intervals are catastrophically long for GPU clusters, and what the three failure modes are — **RDMA QP retry exhaustion**, **AllReduce barrier hang**, and **checkpoint corruption** — and how they interact.
 
 From the network layer, the chapter covers **BFD** (§28.2), the protocol that reduces link-failure detection from 90 seconds (**BGP** keepalive default) to 300 milliseconds. With **BFD**, the routing plane knows about a link failure before **NCCL**'s collective timeout fires, enabling clean route withdrawal and path failover rather than rank timeout and job restart. Section 28.3 completes the **RDMA** layer by explaining QP timeout and retry parameters — the four attributes that determine how long a Queue Pair waits before declaring a remote unreachable and surfacing an error to **NCCL**. Section 28.4 addresses **PFC** Watchdog, which prevents the lossless fabric itself from entering a deadlocked state where no packets flow at all.
 
@@ -94,7 +94,7 @@ ibv_devinfo | head -4
 
 ## 28.2 BFD — Bidirectional Forwarding Detection
 
-BFD (RFC 5880) is a lightweight, protocol-independent liveness detection mechanism. Two peers exchange BFD control packets at a negotiated interval; if packets stop arriving for `(min_rx * multiplier)` milliseconds, the session is declared Down and the associated routing protocol is notified immediately — without waiting for BGP keepalive timers (default hold-time 90 seconds) to expire.
+**BFD (RFC 5880)** is a lightweight, protocol-independent liveness detection mechanism. Two peers exchange BFD control packets at a negotiated interval; if packets stop arriving for `(min_rx * multiplier)` milliseconds, the session is declared Down and the associated routing protocol is notified immediately — without waiting for BGP keepalive timers (default hold-time 90 seconds) to expire.
 
 ### BFD Timer Arithmetic
 
@@ -207,6 +207,7 @@ QP   hw_duplicate_request 0
 `local_ack_timeout_err` is the key counter for link-induced failures. A nonzero and growing value indicates retransmits are being exhausted — usually caused by switch congestion, PFC deadlock, or a flapping link.
 
 ### Mellanox ethtool Counters
+`ethtool` is a command-line utility in Linux used to query and control network driver and hardware settings, primarily for Ethernet devices. It allows system administrators to monitor, diagnose, and tune interface parameters such as speed, duplex mode, auto-negotiation, and checksum offloading.
 
 ```bash
 ethtool -S enp1s0f0 | grep -E 'timeout|retry|rnr|err'
@@ -225,7 +226,7 @@ ethtool -S enp1s0f0 | grep -E 'timeout|retry|rnr|err'
 
 ## 28.4 PFC Watchdog — Preventing Lossless Fabric Deadlocks
 
-Priority Flow Control (PFC) is essential for lossless RoCEv2 fabrics: when a receiver's buffer is full, it sends a PAUSE frame that stops the sender for a configurable duration, preventing drops. However, PFC creates a hazard: if circular dependencies form between PFC-paused flows, the fabric deadlocks. Every switch buffers traffic waiting for a neighbor to unpause, but every neighbor is also paused. Traffic stops flowing entirely.
+**Priority Flow Control (PFC)** is essential for lossless RoCEv2 fabrics: when a receiver's buffer is full, it sends a `PAUSE` frame that stops the sender for a configurable duration, preventing drops. However, PFC creates a hazard: if circular dependencies form between PFC-paused flows, the fabric deadlocks. Every switch buffers traffic waiting for a neighbor to unpause, but every neighbor is also paused. Traffic stops flowing entirely.
 
 ### PFC Storm Detection
 
@@ -389,7 +390,7 @@ for step in range(start_step, MAX_STEPS):
 
 ### DMTCP for Transparent Checkpointing
 
-DMTCP (Distributed MultiThreaded CheckPointing) can checkpoint arbitrary multi-process applications — including NCCL-backed training jobs — without source code modification. It intercepts `fork()`, `exec()`, and socket operations at the `LD_PRELOAD` level:
+**DMTCP (Distributed MultiThreaded CheckPointing)** can checkpoint arbitrary multi-process applications — including NCCL-backed training jobs — without source code modification. It intercepts `fork()`, `exec()`, and socket operations at the `LD_PRELOAD` level:
 
 ```bash
 # Checkpoint a running torchrun job
@@ -547,7 +548,7 @@ groups:
 
 ### BFD State Change via gNMI
 
-OpenConfig models include BFD session state under `openconfig-bfd:bfd`. A gNMI subscription fires an update on every state transition. `gnmic` is an open-source gNMI client CLI tool (by Nokia) that supports Subscribe, Get, and Set RPCs against any gNMI-capable network device, making it the standard command-line interface for on-change telemetry subscriptions.
+**OpenConfig** models include BFD session state under `openconfig-bfd:bfd`. A gNMI subscription fires an update on every state transition. `gnmic` is an open-source gNMI client CLI tool (by Nokia) that supports `Subscribe`, `Get`, and `Set` RPCs against any gNMI-capable network device, making it the standard command-line interface for on-change telemetry subscriptions.
 
 ```bash
 gnmic subscribe \

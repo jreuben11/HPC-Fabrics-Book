@@ -36,7 +36,7 @@ Two flows land on the same spine. One spine carries 2x the load of the other. Th
 
 ### Elephant Flow Concentration
 
-AllReduce flows are by nature "elephant flows" — long-duration, high-bandwidth streams. Unlike web traffic where flows are short and ECMP imbalance averages out quickly, AllReduce flows persist for the entire duration of a training step (potentially minutes). A single unfortunate hash collision can create sustained congestion.
+AllReduce flows are by nature **"elephant flows"** — long-duration, high-bandwidth streams. Unlike web traffic where flows are short and ECMP imbalance averages out quickly, AllReduce flows persist for the entire duration of a training step (potentially minutes). A single unfortunate hash collision can create sustained congestion.
 
 The hash function itself is deterministic and depends only on the 5-tuple. For a specific AllReduce ring, the 5-tuples are fixed: the GPU IP addresses are stable, and the port numbers are assigned by NCCL's rendezvous mechanism. This means the imbalance is not random — it is reproducible on every training iteration.
 
@@ -134,7 +134,7 @@ Flowlet switching is a software-defined adaptive routing technique that exploits
 
 ### The Core Insight
 
-TCP flows are not continuous bit streams — they are bursts of packets separated by ACK-induced pauses, receiver window limits, and application pacing. If a flow has been silent for longer than the maximum path-delay difference (FLOWLET_TIMEOUT), any in-flight packets from the previous burst have already arrived at the destination. It is safe to switch to a different path for the next burst without causing reordering.
+TCP flows are not continuous bit streams — they are bursts of packets separated by ACK-induced pauses, receiver window limits, and application pacing. If a flow has been silent for longer than the maximum path-delay difference (`FLOWLET_TIMEOUT`), any in-flight packets from the previous burst have already arrived at the destination. It is safe to switch to a different path for the next burst without causing reordering.
 
 ```
 Flow timeline:
@@ -211,6 +211,8 @@ This happens entirely in the switch pipeline at line rate, with no software invo
 | `least-loaded` | Select the port with minimum queue depth | Best utilization under elephant flows |
 | `least-loaded-with-hysteresis` | Add hysteresis to avoid oscillation | Balanced utilization with stability |
 
+**Hysteresis** is the dependence of a system's current state on its previous history, where the output lags behind the input, meaning the system does not immediately return to its original state when the cause is removed. It is characterized by a "loop" in a graph plotting output versus input, showing different paths for increasing and decreasing forces.
+
 ### AR Threshold
 
 The AR threshold is a configurable queue depth (in cells) below which a port is considered "acceptable." Ports above the threshold are avoided. Setting the threshold too high defeats the purpose; too low causes all packets to land on the emptiest port, causing oscillation:
@@ -272,7 +274,7 @@ With packet spraying, ECN marks arrive for packets that took different paths —
 
 ## 27.5 SRv6 for DC Traffic Engineering
 
-Segment Routing over IPv6 (SRv6) encodes a sequence of forwarding instructions — **segments** — directly in the IPv6 extension header. Each segment is an IPv6 address that identifies both a node and an operation (function) to perform at that node.
+**Segment Routing over IPv6 (SRv6)** encodes a sequence of forwarding instructions — **segments** — directly in the IPv6 extension header. Each segment is an IPv6 address that identifies both a node and an operation (function) to perform at that node.
 
 ### SRv6 SID Structure
 
@@ -300,7 +302,7 @@ Example SID: 2001:db8:0100::/48 (locator)
 
 ### FRR SRv6 Configuration
 
-FRR (Free Range Routing) is an open-source IP routing suite for Linux that implements BGP, OSPF, IS-IS, SRv6, and other protocols as a collection of daemons managed by a unified configuration plane. `vtysh` is FRR's interactive CLI shell that provides a Cisco-IOS-style command interface for configuring and inspecting all FRR daemons simultaneously.
+**FRR (Free Range Routing)** is an open-source IP routing suite for Linux that implements BGP, OSPF, IS-IS, SRv6, and other protocols as a collection of daemons managed by a unified configuration plane. `vtysh` is FRR's interactive CLI shell that provides a Cisco-IOS-style command interface for configuring and inspecting all FRR daemons simultaneously.
 
 ```
 ! FRR vtysh configuration for SRv6 on a spine router
@@ -385,11 +387,11 @@ traceroute -s 10.0.0.1 10.0.2.1
 
 ## 27.6 UCMP: Unequal Cost Multi-Path
 
-Standard ECMP assumes all next-hops have equal capacity. In real fabrics, links fail and are replaced by links of different speeds, or some spines are overloaded by collocated services. UCMP (Unequal Cost Multi-Path) distributes traffic proportionally to link capacity.
+Standard ECMP assumes all next-hops have equal capacity. In real fabrics, links fail and are replaced by links of different speeds, or some spines are overloaded by collocated services. **UCMP (Unequal Cost Multi-Path)** distributes traffic proportionally to link capacity.
 
 ### BGP Link Bandwidth Community
 
-FRR implements UCMP using the BGP Link Bandwidth extended community (RFC 7311). Each route advertisement carries a `bandwidth:<asn>:<bps>` community indicating the capacity of the advertising link. FRR uses this to weight its ECMP hash tables:
+FRR implements UCMP using the BGP Link Bandwidth extended community (**RFC 7311**). Each route advertisement carries a `bandwidth:<asn>:<bps>` community indicating the capacity of the advertising link. FRR uses this to weight its ECMP hash tables:
 
 ```
 ! FRR vtysh: advertise link bandwidth on spine1 (100G uplink)
