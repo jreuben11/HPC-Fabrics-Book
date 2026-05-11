@@ -1,5 +1,46 @@
 # Chapter 2 — RDMA & the RoCEv2 Stack
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System Packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Soft-RoCE kernel module](#soft-roce-kernel-module)
+  - [CMake build setup for the C libibverbs example](#cmake-build-setup-for-the-c-libibverbs-example)
+  - [Python pyverbs setup (optional, for scripted benchmarks)](#python-pyverbs-setup-optional-for-scripted-benchmarks)
+- [2.1 Why RDMA?](#21-why-rdma)
+- [2.2 The Verbs Programming Model](#22-the-verbs-programming-model)
+  - [2.2.1 Key Abstractions](#221-key-abstractions)
+  - [2.2.2 Connection Types](#222-connection-types)
+  - [2.2.3 Operation Types](#223-operation-types)
+- [2.3 libibverbs API Walkthrough](#23-libibverbs-api-walkthrough)
+- [2.4 InfiniBand vs RoCEv1 vs RoCEv2](#24-infiniband-vs-rocev1-vs-rocev2)
+- [2.5 DCQCN: Congestion Control for RoCEv2](#25-dcqcn-congestion-control-for-rocev2)
+  - [Switch: ECN Marking](#switch-ecn-marking)
+  - [Receiver NIC: CNP Generation](#receiver-nic-cnp-generation)
+  - [Sender NIC: Rate Control](#sender-nic-rate-control)
+- [2.6 The rdma-core Userspace Stack](#26-the-rdma-core-userspace-stack)
+  - [rdma CLI](#rdma-cli)
+  - [Soft-RoCE (rxe)](#soft-roce-rxe)
+- [2.7 Benchmarking with perftest](#27-benchmarking-with-perftest)
+- [2.8 GPUDirect RDMA](#28-gpudirect-rdma)
+- [Lab Walkthrough 2 — RoCEv2 Benchmarking Pipeline](#lab-walkthrough-2-rocev2-benchmarking-pipeline)
+  - [Step 1: Verify the rdma_rxe kernel module is available](#step-1-verify-the-rdmarxe-kernel-module-is-available)
+  - [Step 2: Create a veth pair to simulate two endpoints on one host](#step-2-create-a-veth-pair-to-simulate-two-endpoints-on-one-host)
+  - [Step 3: Load the rdma_rxe module and create two rxe devices](#step-3-load-the-rdmarxe-module-and-create-two-rxe-devices)
+  - [Step 4: Enumerate RDMA devices and verify capabilities](#step-4-enumerate-rdma-devices-and-verify-capabilities)
+  - [Step 5: Run ib_write_bw — RDMA WRITE bandwidth test](#step-5-run-ibwritebw-rdma-write-bandwidth-test)
+  - [Step 6: Sweep message sizes for a bandwidth curve](#step-6-sweep-message-sizes-for-a-bandwidth-curve)
+  - [Step 7: Run ib_write_lat — RDMA WRITE latency test](#step-7-run-ibwritelat-rdma-write-latency-test)
+  - [Step 8: Run ib_read_lat — RDMA READ latency test](#step-8-run-ibreadlat-rdma-read-latency-test)
+  - [Step 9: Run ib_write_bw with multiple QPs — QP scaling test](#step-9-run-ibwritebw-with-multiple-qps-qp-scaling-test)
+  - [Step 10: Verify RDMA traffic is flowing via counters](#step-10-verify-rdma-traffic-is-flowing-via-counters)
+  - [Step 11: Simulate ECN-like delay with netem and observe latency impact](#step-11-simulate-ecn-like-delay-with-netem-and-observe-latency-impact)
+  - [Step 12: Clean up rxe devices and veth pair](#step-12-clean-up-rxe-devices-and-veth-pair)
+- [Summary](#summary)
+- [References](#references)
+
 **Part I: Foundations** | ~25 pages
 
 ---

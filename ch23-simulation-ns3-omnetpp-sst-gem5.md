@@ -1,5 +1,41 @@
 # Chapter 23 — Simulation: NS-3, OMNET++, SST & GEM5
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [NS-3 (build from source)](#ns-3-build-from-source)
+  - [OMNET++](#omnet)
+  - [SST](#sst)
+  - [GEM5](#gem5)
+- [23.1 When to Simulate vs Emulate](#231-when-to-simulate-vs-emulate)
+- [23.2 NS-3 — Discrete-Event Network Simulation](#232-ns-3-discrete-event-network-simulation)
+  - [23.2.1 Architecture](#2321-architecture)
+  - [23.2.2 Minimal Example — Fat-Tree with RoCEv2](#2322-minimal-example-fat-tree-with-rocev2)
+  - [23.2.3 RDMA / RoCE Module](#2323-rdma-roce-module)
+- [23.3 OMNET++ — Modular Discrete-Event Simulation](#233-omnet-modular-discrete-event-simulation)
+  - [23.3.1 Key Strengths](#2331-key-strengths)
+  - [23.3.2 Simple NED Topology](#2332-simple-ned-topology)
+- [23.4 SST — Structural Simulation Toolkit](#234-sst-structural-simulation-toolkit)
+  - [23.4.1 Architecture](#2341-architecture)
+  - [23.4.2 Merlin Network Framework](#2342-merlin-network-framework)
+- [23.5 GEM5 — Full-System Simulation](#235-gem5-full-system-simulation)
+  - [23.5.1 Relevance for AI Networking](#2351-relevance-for-ai-networking)
+  - [23.5.2 Configuration](#2352-configuration)
+- [23.6 Simulation vs Emulation Decision Guide](#236-simulation-vs-emulation-decision-guide)
+- [Lab Walkthrough 23 — NS-3 DCQCN Parameter Sweep](#lab-walkthrough-23-ns-3-dcqcn-parameter-sweep)
+  - [Step 1 — Install NS-3 and the RDMA/DCQCN module](#step-1-install-ns-3-and-the-rdmadcqcn-module)
+  - [Step 2 — Understand the simulation script structure](#step-2-understand-the-simulation-script-structure)
+  - [Step 3 — Run a baseline simulation (4-spine, 8-leaf, 32 hosts)](#step-3-run-a-baseline-simulation-4-spine-8-leaf-32-hosts)
+  - [Step 4 — Write a Python sweep script](#step-4-write-a-python-sweep-script)
+  - [Step 5 — Interpret the results](#step-5-interpret-the-results)
+  - [Step 6 — OMNET++ hello world](#step-6-omnet-hello-world)
+  - [Step 7 — SST smoke test](#step-7-sst-smoke-test)
+  - [Step 8 — GEM5 smoke test](#step-8-gem5-smoke-test)
+- [Summary](#summary)
+- [References](#references)
+
 **Part VII: Testing, Emulation & Simulation** | ~10 pages
 
 ---

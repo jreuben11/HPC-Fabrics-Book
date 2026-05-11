@@ -1,5 +1,50 @@
 # Chapter 22 — Network CI & Configuration Validation
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages](#system-packages)
+  - [Containerlab (for topology tests)](#containerlab-for-topology-tests)
+  - [Python environment (uv)](#python-environment-uv)
+  - [Batfish server (Docker)](#batfish-server-docker)
+- [22.1 Treating Network Config as Code](#221-treating-network-config-as-code)
+- [22.2 Batfish — Intent-Based Network Analysis](#222-batfish-intent-based-network-analysis)
+  - [22.2.1 Setup](#2221-setup)
+  - [22.2.2 Snapshot Loading](#2222-snapshot-loading)
+  - [22.2.3 Reachability Analysis](#2223-reachability-analysis)
+  - [22.2.4 Routing Policy Verification](#2224-routing-policy-verification)
+  - [22.2.5 Differential Analysis — Pre/Post Change](#2225-differential-analysis-prepost-change)
+- [22.3 pyATS / Genie — Structured Device Testing](#223-pyats-genie-structured-device-testing)
+  - [22.3.1 Testbed File](#2231-testbed-file)
+  - [22.3.2 Golden Config Snapshot](#2232-golden-config-snapshot)
+  - [22.3.3 Golden Diff Test](#2233-golden-diff-test)
+  - [22.3.4 Genie Parsers Available](#2234-genie-parsers-available)
+- [22.4 Nornir — Inventory-Driven Automation](#224-nornir-inventory-driven-automation)
+  - [22.4.1 Inventory](#2241-inventory)
+  - [22.4.2 Running Tasks](#2242-running-tasks)
+  - [22.4.3 Config Rendering and Push](#2243-config-rendering-and-push)
+  - [22.4.4 pytest Integration](#2244-pytest-integration)
+- [22.5 Full CI Pipeline](#225-full-ci-pipeline)
+- [Lab Walkthrough 22 — Batfish → Containerlab → pyATS Pipeline](#lab-walkthrough-22-batfish-containerlab-pyats-pipeline)
+  - [Step 1: Start the Batfish Server](#step-1-start-the-batfish-server)
+  - [Step 2: Export SR Linux Config from a Running Containerlab Topology](#step-2-export-sr-linux-config-from-a-running-containerlab-topology)
+  - [Step 3: Create the Snapshot Directory Structure](#step-3-create-the-snapshot-directory-structure)
+  - [Step 4: Load Snapshot with pybatfish — Full Python Script](#step-4-load-snapshot-with-pybatfish-full-python-script)
+  - [Step 5: Run Reachability Question — Full Query and Result DataFrame](#step-5-run-reachability-question-full-query-and-result-dataframe)
+  - [Step 6: Assert No Default Route Originated from Leaves](#step-6-assert-no-default-route-originated-from-leaves)
+  - [Step 7: Assert ECMP — Check 4 Equal-Cost Paths with Expected Result](#step-7-assert-ecmp-check-4-equal-cost-paths-with-expected-result)
+  - [Step 8: Make a Breaking Change — Remove a BGP Neighbor from a Config File](#step-8-make-a-breaking-change-remove-a-bgp-neighbor-from-a-config-file)
+  - [Step 9: Init Proposed Snapshot and Run Differential Reachability](#step-9-init-proposed-snapshot-and-run-differential-reachability)
+  - [Step 10: Show Batfish Catches the Regression — FlowDiff == "LOST" Rows](#step-10-show-batfish-catches-the-regression-flowdiff-lost-rows)
+  - [Step 11: Fix the Config and Rerun — Show PASS](#step-11-fix-the-config-and-rerun-show-pass)
+  - [Step 12: Nornir — inventory.yaml + hosts.yaml, Run `show bgp summary` in Parallel](#step-12-nornir-inventoryyaml-hostsyaml-run-show-bgp-summary-in-parallel)
+  - [Step 13: Full pytest Test File — All BGP Sessions Established via Genie Parsing](#step-13-full-pytest-test-file-all-bgp-sessions-established-via-genie-parsing)
+  - [Step 14: Run pytest -v and Show Expected PASS Output](#step-14-run-pytest-v-and-show-expected-pass-output)
+- [Summary](#summary)
+- [References](#references)
+
 **Part VII: Testing, Emulation & Simulation** | ~15 pages
 
 ---

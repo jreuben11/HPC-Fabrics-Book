@@ -1,5 +1,46 @@
 # Chapter 13 — Multi-NIC GPU Pods: Multus, SR-IOV & Network Operator
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System Packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Python Environment (uv)](#python-environment-uv)
+- [13.1 The Multi-NIC Problem](#131-the-multi-nic-problem)
+- [13.2 Multus CNI — Meta-Plugin for Multiple Interfaces](#132-multus-cni-meta-plugin-for-multiple-interfaces)
+  - [13.2.1 Installation](#1321-installation)
+  - [13.2.2 NetworkAttachmentDefinition](#1322-networkattachmentdefinition)
+  - [13.2.3 Pod Annotation](#1323-pod-annotation)
+- [13.3 SR-IOV — Single Root I/O Virtualization](#133-sr-iov-single-root-io-virtualization)
+  - [13.3.1 SR-IOV Mechanism](#1331-sr-iov-mechanism)
+  - [13.3.2 Enabling SR-IOV on a Mellanox NIC](#1332-enabling-sr-iov-on-a-mellanox-nic)
+  - [13.3.3 RDMA in VFs](#1333-rdma-in-vfs)
+- [13.4 SR-IOV Network Operator](#134-sr-iov-network-operator)
+  - [13.4.1 Installation](#1341-installation)
+  - [13.4.2 SriovNetworkNodePolicy](#1342-sriovnetworknodepolicy)
+  - [13.4.3 Checking Resource Availability](#1343-checking-resource-availability)
+- [13.5 NVIDIA Network Operator](#135-nvidia-network-operator)
+  - [13.5.1 Installation](#1351-installation)
+  - [13.5.2 NV-IPAM — Cluster-Wide IP Allocation](#1352-nv-ipam-cluster-wide-ip-allocation)
+- [13.6 GPUDirect RDMA in Kubernetes](#136-gpudirect-rdma-in-kubernetes)
+- [13.7 Whereabouts — Cluster-Wide IPAM](#137-whereabouts-cluster-wide-ipam)
+- [Lab Walkthrough 13 — Multi-NIC GPU Pod with SR-IOV and NCCL](#lab-walkthrough-13-multi-nic-gpu-pod-with-sr-iov-and-nccl)
+  - [Step 1 — Verify Prerequisites](#step-1-verify-prerequisites)
+  - [Step 2 — Create a Kind Cluster](#step-2-create-a-kind-cluster)
+  - [Step 3 — Install Flannel as Primary CNI](#step-3-install-flannel-as-primary-cni)
+  - [Step 4 — Install Multus CNI](#step-4-install-multus-cni)
+  - [Step 5 — Install Whereabouts IPAM](#step-5-install-whereabouts-ipam)
+  - [Step 6 — Create the NetworkAttachmentDefinition (macvlan stand-in for SR-IOV)](#step-6-create-the-networkattachmentdefinition-macvlan-stand-in-for-sr-iov)
+  - [Step 7 — Deploy Two Pods with Multus Annotation](#step-7-deploy-two-pods-with-multus-annotation)
+  - [Step 8 — Verify Secondary Interfaces Inside Each Pod](#step-8-verify-secondary-interfaces-inside-each-pod)
+  - [Step 9 — Run iperf3 Between Pods via the Secondary Interface](#step-9-run-iperf3-between-pods-via-the-secondary-interface)
+  - [Step 10 — Minimal Distributed PyTorch Hello (NCCL via Socket Fallback)](#step-10-minimal-distributed-pytorch-hello-nccl-via-socket-fallback)
+  - [Step 11 — Delta: What Changes with Real SR-IOV VFs](#step-11-delta-what-changes-with-real-sr-iov-vfs)
+  - [Step 12 — Cleanup](#step-12-cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part IV: Overlay & Kubernetes Networking** | ~20 pages
 
 ---

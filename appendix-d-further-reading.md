@@ -1,5 +1,14 @@
 # Appendix D — Further Reading & Community Resources
 
+
+## Table of Contents
+
+- [D.1 Mailing Lists & Discussion Forums](#d1-mailing-lists-discussion-forums)
+- [D.2 Slack Workspaces & Real-Time Communities](#d2-slack-workspaces-real-time-communities)
+- [D.3 Conferences & Workshops](#d3-conferences-workshops)
+- [D.4 Reference Repositories & Learning Resources](#d4-reference-repositories-learning-resources)
+- [D.5 Companion Investigations](#d5-companion-investigations)
+
 Curated pointers to the communities, conferences, mailing lists, and reference materials that track the AI cluster networking ecosystem. This is not a comprehensive bibliography — it is a survival guide for staying current in a fast-moving field.
 
 ---

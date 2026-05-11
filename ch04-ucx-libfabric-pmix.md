@@ -1,5 +1,40 @@
 # Chapter 4 — Interconnect Abstractions: UCX, LibFabric & PMIx
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Ubuntu 24.04 Packages](#ubuntu-2404-packages)
+  - [Python Environment (uv)](#python-environment-uv)
+  - [CMakeLists.txt for UCX C Example](#cmakeliststxt-for-ucx-c-example)
+- [4.1 The Portability Problem](#41-the-portability-problem)
+- [4.2 UCX — Unified Communication X](#42-ucx-unified-communication-x)
+  - [4.2.1 Architecture](#421-architecture)
+  - [4.2.2 Endpoint and Transport Selection](#422-endpoint-and-transport-selection)
+  - [4.2.3 UCX Environment Variables for Tuning](#423-ucx-environment-variables-for-tuning)
+  - [4.2.4 UCC — Unified Collective Communication](#424-ucc-unified-collective-communication)
+- [4.3 LibFabric (OFI) — OpenFabrics Interface](#43-libfabric-ofi-openfabrics-interface)
+  - [4.3.1 Design Philosophy](#431-design-philosophy)
+  - [4.3.2 Core Abstractions](#432-core-abstractions)
+  - [4.3.3 Minimal Send/Recv Example](#433-minimal-sendrecv-example)
+  - [4.3.4 Provider Selection](#434-provider-selection)
+- [4.4 PMIx — Process Management Interface for Exascale](#44-pmix-process-management-interface-for-exascale)
+  - [4.4.1 The Bootstrap Problem](#441-the-bootstrap-problem)
+  - [4.4.2 PMIx Architecture](#442-pmix-architecture)
+  - [4.4.3 Key Operations](#443-key-operations)
+  - [4.4.4 Fault Notification](#444-fault-notification)
+- [4.5 CXL — Coherent Memory Fabric](#45-cxl-coherent-memory-fabric)
+  - [Relevance for AI Clusters](#relevance-for-ai-clusters)
+- [Lab Walkthrough 4 — UCX Transport Inspection](#lab-walkthrough-4-ucx-transport-inspection)
+  - [Step 1 — Run ucx_info -d and Interpret the Transport List](#step-1-run-ucxinfo-d-and-interpret-the-transport-list)
+  - [Step 2 — Run ucx_perftest in Loopback Mode](#step-2-run-ucxperftest-in-loopback-mode)
+  - [Step 3 — Force UCX_TLS=tcp vs UCX_TLS=shmem and Compare Bandwidth](#step-3-force-ucxtlstcp-vs-ucxtlsshmem-and-compare-bandwidth)
+  - [Step 4 — Find the Transport Selection Log Line with UCX_LOG_LEVEL=DEBUG](#step-4-find-the-transport-selection-log-line-with-ucxlogleveldebug)
+  - [Step 5 — Interpret fi_info --list Output](#step-5-interpret-fiinfo-list-output)
+- [Summary](#summary)
+- [References](#references)
+
 **Part I: Foundations** | ~15 pages
 
 ---

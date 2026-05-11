@@ -1,5 +1,41 @@
 # Appendix B — Benchmark Cheat Sheet
 
+
+## Table of Contents
+
+- [B.1 RDMA Bandwidth & Latency — `perftest`](#b1-rdma-bandwidth-latency-perftest)
+  - [Write Bandwidth (large message, bidirectional)](#write-bandwidth-large-message-bidirectional)
+  - [Write Latency (small message)](#write-latency-small-message)
+  - [Read Bandwidth and Send Bandwidth](#read-bandwidth-and-send-bandwidth)
+  - [Validate ECN / DCQCN During Load](#validate-ecn-dcqcn-during-load)
+- [B.2 NCCL Collective Throughput — `nccl-tests`](#b2-nccl-collective-throughput-nccl-tests)
+  - [AllReduce Bandwidth Sweep](#allreduce-bandwidth-sweep)
+  - [AllGather, ReduceScatter, AllToAll](#allgather-reducescatter-alltoall)
+  - [NCCL Environment Tuning Variables](#nccl-environment-tuning-variables)
+- [B.3 TCP Throughput & Latency — `iperf3`](#b3-tcp-throughput-latency-iperf3)
+  - [Throughput (single stream)](#throughput-single-stream)
+  - [Parallel Streams (saturate high-speed links)](#parallel-streams-saturate-high-speed-links)
+  - [UDP Latency with `qperf`](#udp-latency-with-qperf)
+  - [Netcat RTT (quick baseline, no install needed)](#netcat-rtt-quick-baseline-no-install-needed)
+- [B.4 NVMe-oF Storage — `fio`](#b4-nvme-of-storage-fio)
+  - [Sequential Read Bandwidth (NVMe-oF target)](#sequential-read-bandwidth-nvme-of-target)
+  - [Random 4K IOPS (latency-sensitive checkpoint write)](#random-4k-iops-latency-sensitive-checkpoint-write)
+  - [Checkpoint Simulation (large sequential write)](#checkpoint-simulation-large-sequential-write)
+  - [SPDK Benchmark (user-space NVMe-oF)](#spdk-benchmark-user-space-nvme-of)
+- [B.5 gNMI Streaming Telemetry — `gnmic`](#b5-gnmi-streaming-telemetry-gnmic)
+  - [Subscribe to Interface Counters (STREAM mode)](#subscribe-to-interface-counters-stream-mode)
+  - [Get BGP Session State (one-shot)](#get-bgp-session-state-one-shot)
+  - [Subscribe to All Interface Errors (SR Linux)](#subscribe-to-all-interface-errors-sr-linux)
+  - [Collect into Prometheus via Telegraf](#collect-into-prometheus-via-telegraf)
+- [B.6 Prometheus PromQL — GPU Cluster Dashboards](#b6-prometheus-promql-gpu-cluster-dashboards)
+  - [Network Throughput (bits/sec, per interface)](#network-throughput-bitssec-per-interface)
+  - [RDMA Error Rate](#rdma-error-rate)
+  - [GPU Utilization & Memory (DCGM Exporter)](#gpu-utilization-memory-dcgm-exporter)
+  - [AllReduce Timing Alert](#allreduce-timing-alert)
+  - [Switch Buffer Utilization (SONiC SAI counters via SNMP exporter)](#switch-buffer-utilization-sonic-sai-counters-via-snmp-exporter)
+  - [Disk I/O — Checkpoint Throughput](#disk-io-checkpoint-throughput)
+- [B.7 Quick Reference — Baseline Expectations](#b7-quick-reference-baseline-expectations)
+
 A collection of ready-to-run commands for measuring and validating performance at every layer of the AI cluster network stack. Commands are organized by tool. For each, the most useful variant is shown first, followed by key flags and their meanings. Output interpretation notes follow where the metric is non-obvious.
 
 Unless otherwise noted, commands assume Linux with MOFED or upstream RDMA drivers installed, and require at least two nodes or two terminals (server/client roles are labeled).

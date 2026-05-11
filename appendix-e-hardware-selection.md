@@ -1,5 +1,37 @@
 # Appendix E — Hardware Selection Guide
 
+
+## Table of Contents
+
+- [E.1 NIC / HCA Selection](#e1-nic-hca-selection)
+  - [E.1.1 Comparison Table](#e11-comparison-table)
+  - [E.1.2 Selection Criteria](#e12-selection-criteria)
+  - [E.1.3 Decision Tree](#e13-decision-tree)
+  - [E.1.4 Driver and Software Ecosystem Notes](#e14-driver-and-software-ecosystem-notes)
+  - [E.1.5 Emerging NIC Technologies](#e15-emerging-nic-technologies)
+  - [E.1.6 Key NIC Specifications Explained](#e16-key-nic-specifications-explained)
+- [E.2 Switch ASIC Comparison](#e2-switch-asic-comparison)
+  - [E.2.1 Comparison Table](#e21-comparison-table)
+  - [E.2.2 ASIC Selection by Fabric Role](#e22-asic-selection-by-fabric-role)
+  - [E.2.3 ASIC Telemetry Capabilities](#e23-asic-telemetry-capabilities)
+  - [E.2.4 Buffer Sizing Philosophy](#e24-buffer-sizing-philosophy)
+  - [E.2.5 NOS Ecosystem per ASIC](#e25-nos-ecosystem-per-asic)
+  - [E.2.6 Fabric Topology Implications per ASIC](#e26-fabric-topology-implications-per-asic)
+- [E.3 Cable and Optics](#e3-cable-and-optics)
+  - [E.3.1 Cable Technology Overview](#e31-cable-technology-overview)
+  - [E.3.2 Cable Selection Quick Reference](#e32-cable-selection-quick-reference)
+  - [E.3.3 Fiber Plant Planning](#e33-fiber-plant-planning)
+- [E.4 Cost/Performance Reference Table](#e4-costperformance-reference-table)
+  - [E.4.1 Total Cost of Ownership Considerations](#e41-total-cost-of-ownership-considerations)
+  - [E.4.2 Procurement Checklist](#e42-procurement-checklist)
+- [E.5 Vendor Ecosystem Summary](#e5-vendor-ecosystem-summary)
+  - [NVIDIA (End-to-End AI Networking)](#nvidia-end-to-end-ai-networking)
+  - [Broadcom (Volume and Cost Efficiency)](#broadcom-volume-and-cost-efficiency)
+  - [Intel (Programmability and Open Pipeline)](#intel-programmability-and-open-pipeline)
+  - [Arista + Cisco (NOS Ecosystem and Enterprise Operability)](#arista-cisco-nos-ecosystem-and-enterprise-operability)
+  - [SONiC Open-Source Ecosystem](#sonic-open-source-ecosystem)
+- [E.6 Quick Reference: NIC to GPU Pairing Matrix](#e6-quick-reference-nic-to-gpu-pairing-matrix)
+
 This appendix provides a practical reference for infrastructure engineers selecting network hardware for AI compute clusters. Decisions at the NIC, switch ASIC, and cable layer have multi-year consequences for performance, cost, and operational complexity. The guidance here targets clusters ranging from a single rack of H100s to multi-thousand-GPU fabrics.
 
 ---

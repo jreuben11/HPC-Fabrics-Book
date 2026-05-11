@@ -1,5 +1,18 @@
 # Appendix A — Lab Topology Library
 
+
+## Table of Contents
+
+- [A.1 Two-Spine / Four-Leaf BGP-EVPN Fabric](#a1-two-spine-four-leaf-bgp-evpn-fabric)
+  - [Minimal FRR Leaf Configuration (leaf1-frr.cfg)](#minimal-frr-leaf-configuration-leaf1-frrcfg)
+  - [Validation Commands](#validation-commands)
+- [A.2 Rail-Optimized GPU Cluster Fabric](#a2-rail-optimized-gpu-cluster-fabric)
+  - [Setting Up Soft-RDMA for Lab Testing](#setting-up-soft-rdma-for-lab-testing)
+  - [Validate Rail Isolation](#validate-rail-isolation)
+- [A.3 Multi-NIC GPU Pod Testbed](#a3-multi-nic-gpu-pod-testbed)
+  - [Kubernetes Setup Commands](#kubernetes-setup-commands)
+  - [NetworkAttachmentDefinition Verification](#networkattachmentdefinition-verification)
+
 Ready-to-run Containerlab topologies covering the three canonical AI cluster lab configurations used in exercises throughout this book. Each topology is self-contained: copy the YAML to a working directory, pull the referenced container images, and run `containerlab deploy -t <file>.yaml`. Startup configs (where shown inline) can be extracted to separate files and referenced via `startup-config:` paths.
 
 All topologies assume Containerlab ≥ 0.54 and Docker ≥ 24. SR Linux images are pulled from `ghcr.io/nokia/srlinux`; SONiC-VS from `ghcr.io/sonic-net/sonic-vs`; FRR from `frrouting/frr`.

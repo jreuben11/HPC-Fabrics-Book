@@ -1,5 +1,39 @@
 # Chapter 3 — Precision Time Protocol
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Ubuntu 24.04 Packages](#ubuntu-2404-packages)
+  - [Containerlab](#containerlab)
+- [3.1 Why Timing Matters in AI Clusters](#31-why-timing-matters-in-ai-clusters)
+- [3.2 IEEE 1588v2 (PTPv2) Architecture](#32-ieee-1588v2-ptpv2-architecture)
+  - [Clock Types](#clock-types)
+  - [Best Master Clock Algorithm (BMCA)](#best-master-clock-algorithm-bmca)
+- [3.3 PTP Message Exchange and Timestamping](#33-ptp-message-exchange-and-timestamping)
+- [3.4 linuxptp in Practice](#34-linuxptp-in-practice)
+  - [Components](#components)
+  - [ptp4l Configuration](#ptp4l-configuration)
+  - [phc2sys — Syncing System Clock to PHC](#phc2sys-syncing-system-clock-to-phc)
+  - [pmc — Inspecting PTP State](#pmc-inspecting-ptp-state)
+- [3.5 Grandmaster Setup with GPS/PPS](#35-grandmaster-setup-with-gpspps)
+- [3.6 chrony as Fallback and Hybrid NTP/PTP](#36-chrony-as-fallback-and-hybrid-ntpptp)
+- [3.7 Deployment Patterns for AI Clusters](#37-deployment-patterns-for-ai-clusters)
+  - [Pattern 1: BC on Top-of-Rack Switches](#pattern-1-bc-on-top-of-rack-switches)
+  - [Pattern 2: TC on Switches, OC on Servers](#pattern-2-tc-on-switches-oc-on-servers)
+  - [Pattern 3: PTP Over Synchronous Ethernet (SyncE)](#pattern-3-ptp-over-synchronous-ethernet-synce)
+- [Lab Walkthrough 3 — PTP Domain in Containerlab](#lab-walkthrough-3-ptp-domain-in-containerlab)
+  - [Step 1 — Check ethtool Hardware Timestamping on the Host NIC](#step-1-check-ethtool-hardware-timestamping-on-the-host-nic)
+  - [Step 2 — Write the Containerlab Topology File](#step-2-write-the-containerlab-topology-file)
+  - [Step 3 — Start ptp4l on All Three Nodes](#step-3-start-ptp4l-on-all-three-nodes)
+  - [Step 4 — Query pmc and Interpret the Output](#step-4-query-pmc-and-interpret-the-output)
+  - [Step 5 — Inject 10 ms netem Delay and Watch Servo Behavior](#step-5-inject-10-ms-netem-delay-and-watch-servo-behavior)
+  - [Step 6 — Kill the GM Container and Verify Slave Loses Lock](#step-6-kill-the-gm-container-and-verify-slave-loses-lock)
+  - [Step 7 — Teardown](#step-7-teardown)
+- [Summary](#summary)
+- [References](#references)
+
 **Part I: Foundations** | ~15 pages
 
 ---

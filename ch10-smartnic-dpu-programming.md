@@ -1,5 +1,43 @@
 # Chapter 10 — SmartNIC & DPU Programming
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [OVS-DPDK (host-side stand-in for DPU OVS)](#ovs-dpdk-host-side-stand-in-for-dpu-ovs)
+  - [DOCA SDK — on Physical BlueField Hardware](#doca-sdk-on-physical-bluefield-hardware)
+  - [DOCA Development Container (no hardware required)](#doca-development-container-no-hardware-required)
+  - [Python (for DOCA telemetry gRPC scripts)](#python-for-doca-telemetry-grpc-scripts)
+  - [CMake for DOCA C Example](#cmake-for-doca-c-example)
+- [10.1 The DPU as Network Control Point](#101-the-dpu-as-network-control-point)
+  - [DPU vs SmartNIC vs Standard NIC](#dpu-vs-smartnic-vs-standard-nic)
+- [10.2 DPU Architecture: BlueField-3](#102-dpu-architecture-bluefield-3)
+- [10.3 NVIDIA DOCA SDK](#103-nvidia-doca-sdk)
+  - [10.3.1 DOCA Installation](#1031-doca-installation)
+  - [10.3.2 Flow Steering with DOCA](#1032-flow-steering-with-doca)
+  - [10.3.3 DOCA Telemetry](#1033-doca-telemetry)
+- [10.4 OVS-DPDK Offload to DPU](#104-ovs-dpdk-offload-to-dpu)
+  - [Architecture](#architecture)
+  - [Configuration](#configuration)
+- [10.5 eBPF Offload to SmartNIC](#105-ebpf-offload-to-smartnic)
+- [10.6 P4 on SmartNICs](#106-p4-on-smartnics)
+- [10.7 RDMA Proxy and GPUDirect on DPU](#107-rdma-proxy-and-gpudirect-on-dpu)
+- [10.8 DPU in AI Cluster Context](#108-dpu-in-ai-cluster-context)
+- [Lab Walkthrough 10 — OVS-DPDK Stand-in and DOCA Container](#lab-walkthrough-10-ovs-dpdk-stand-in-and-doca-container)
+  - [Step 1 — Verify OVS-DPDK Installation and Enable DPDK](#step-1-verify-ovs-dpdk-installation-and-enable-dpdk)
+  - [Step 2 — Create the DPDK Bridge](#step-2-create-the-dpdk-bridge)
+  - [Step 3 — Add DPDK Ports Using --vdev (Virtual Devices)](#step-3-add-dpdk-ports-using-vdev-virtual-devices)
+  - [Step 4 — Assign IP Addresses to the TAP Interfaces](#step-4-assign-ip-addresses-to-the-tap-interfaces)
+  - [Step 5 — Add OpenFlow Rules and Test Forwarding](#step-5-add-openflow-rules-and-test-forwarding)
+  - [Step 6 — Add an IP-Match Rule and Observe Selective Forwarding](#step-6-add-an-ip-match-rule-and-observe-selective-forwarding)
+  - [Step 7 — Demonstrate Hardware Offload Concepts with PMD Stats](#step-7-demonstrate-hardware-offload-concepts-with-pmd-stats)
+  - [Step 8 — Run the DOCA Development Container and Verify the Toolchain](#step-8-run-the-doca-development-container-and-verify-the-toolchain)
+  - [Step 9 — Write, Compile, and Run flow_steer.c in the Container](#step-9-write-compile-and-run-flowsteerc-in-the-container)
+  - [Step 10 — Cleanup](#step-10-cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part III: Programmable Fabric** | ~20 pages
 
 ---

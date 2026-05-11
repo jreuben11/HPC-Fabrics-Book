@@ -1,5 +1,31 @@
 # Appendix I — Kubernetes SIGs & CNCF Project Landscape
 
+
+## Table of Contents
+
+- [Part 1 — Kubernetes Special Interest Groups](#part-1-kubernetes-special-interest-groups)
+  - [sig-network](#sig-network)
+  - [sig-node](#sig-node)
+  - [sig-scheduling](#sig-scheduling)
+  - [sig-storage](#sig-storage)
+  - [sig-instrumentation](#sig-instrumentation)
+  - [sig-auth](#sig-auth)
+  - [sig-multicluster](#sig-multicluster)
+  - [sig-cluster-lifecycle](#sig-cluster-lifecycle)
+  - [wg-device-management](#wg-device-management)
+  - [wg-serving *(concluded February 2026)*](#wg-serving-concluded-february-2026)
+- [Part 2 — CNCF Projects Relevant to AI Cluster Infrastructure](#part-2-cncf-projects-relevant-to-ai-cluster-infrastructure)
+  - [Networking](#networking)
+  - [Observability](#observability)
+  - [Storage](#storage)
+  - [Security](#security)
+  - [Scheduling & Workload](#scheduling-workload)
+  - [Runtimes](#runtimes)
+  - [Service Mesh & Ingress](#service-mesh-ingress)
+  - [AI/ML Infrastructure](#aiml-infrastructure)
+- [Quick Cross-Reference: Projects by Book Chapter](#quick-cross-reference-projects-by-book-chapter)
+- [Kubernetes SIG & Working Group Resources](#kubernetes-sig-working-group-resources)
+
 *The AI Cluster Network Stack — Building High-Performance Fabrics for GPU Clusters from First Principles*
 
 ---

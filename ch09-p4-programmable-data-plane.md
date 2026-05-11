@@ -1,5 +1,46 @@
 # Chapter 9 — P4 & the Programmable Data Plane
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [p4c Compiler](#p4c-compiler)
+  - [bmv2 Behavioral Model](#bmv2-behavioral-model)
+  - [Python P4Runtime Controller (via uv)](#python-p4runtime-controller-via-uv)
+- [9.1 Beyond Fixed-Function Forwarding](#91-beyond-fixed-function-forwarding)
+- [9.2 OpenFlow: The SDN Pioneer](#92-openflow-the-sdn-pioneer)
+  - [9.2.1 The Match-Action Model](#921-the-match-action-model)
+  - [9.2.2 The Controller Channel](#922-the-controller-channel)
+  - [9.2.3 OpenFlow with OVS and Ryu](#923-openflow-with-ovs-and-ryu)
+  - [9.2.4 OpenFlow's Limitations — Why P4 Was Needed](#924-openflows-limitations-why-p4-was-needed)
+  - [9.2.5 SDN Controllers: ONOS and OpenDaylight](#925-sdn-controllers-onos-and-opendaylight)
+- [9.3 P4₁₆ Language](#93-p4₁₆-language)
+  - [9.3.1 Architecture Model](#931-architecture-model)
+  - [9.3.2 Headers and Metadata](#932-headers-and-metadata)
+  - [9.3.3 Parser](#933-parser)
+  - [9.3.4 Match-Action Tables](#934-match-action-tables)
+  - [9.3.5 Deparser](#935-deparser)
+- [9.4 Targets](#94-targets)
+  - [9.4.1 bmv2 — Behavioral Model v2](#941-bmv2-behavioral-model-v2)
+  - [9.4.2 Intel Tofino — Programmable ASIC](#942-intel-tofino-programmable-asic)
+- [9.5 P4Runtime — Control Plane API](#95-p4runtime-control-plane-api)
+- [9.6 In-Network Computing for AI](#96-in-network-computing-for-ai)
+  - [SHARP (Scalable Hierarchical Aggregation and Reduction Protocol)](#sharp-scalable-hierarchical-aggregation-and-reduction-protocol)
+  - [INT — In-Band Network Telemetry](#int-in-band-network-telemetry)
+- [Lab Walkthrough 9 — P4 Router on bmv2 with P4Runtime Controller](#lab-walkthrough-9-p4-router-on-bmv2-with-p4runtime-controller)
+  - [Step 1 — Write the Full router.p4 Program](#step-1-write-the-full-routerp4-program)
+  - [Step 2 — Compile with p4c](#step-2-compile-with-p4c)
+  - [Step 3 — Create veth Pairs and Network Namespaces](#step-3-create-veth-pairs-and-network-namespaces)
+  - [Step 4 — Start simple_switch](#step-4-start-simpleswitch)
+  - [Step 5 — Write and Run the Python P4Runtime Controller](#step-5-write-and-run-the-python-p4runtime-controller)
+  - [Step 6 — Verify End-to-End Forwarding with ping](#step-6-verify-end-to-end-forwarding-with-ping)
+  - [Step 7 — Read the Packet Counter Table via P4Runtime](#step-7-read-the-packet-counter-table-via-p4runtime)
+  - [Step 8 — Craft and Send Packets with Scapy; Verify Forwarding Decisions](#step-8-craft-and-send-packets-with-scapy-verify-forwarding-decisions)
+  - [Step 9 — Cleanup](#step-9-cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part III: Programmable Fabric** | ~20 pages
 
 ---

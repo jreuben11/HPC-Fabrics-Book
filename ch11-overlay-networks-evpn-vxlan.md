@@ -1,5 +1,46 @@
 # Chapter 11 — Overlay Networks: BGP-EVPN, VXLAN, OVS & OVN
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Containerlab](#containerlab)
+  - [FRR (for host containers and bare-metal testing)](#frr-for-host-containers-and-bare-metal-testing)
+  - [CMake (required if building OVS or iproute2 from source)](#cmake-required-if-building-ovs-or-iproute2-from-source)
+  - [Python environment (device automation)](#python-environment-device-automation)
+- [11.1 Why Overlays in AI Clusters?](#111-why-overlays-in-ai-clusters)
+- [11.2 VXLAN — Virtual Extensible LAN](#112-vxlan-virtual-extensible-lan)
+  - [11.2.1 Encapsulation Format](#1121-encapsulation-format)
+  - [11.2.2 VTEP Model](#1122-vtep-model)
+  - [11.2.3 Linux VXLAN Interface](#1123-linux-vxlan-interface)
+- [11.3 BGP-EVPN — Control Plane for VXLAN](#113-bgp-evpn-control-plane-for-vxlan)
+  - [11.3.1 EVPN Route Types](#1131-evpn-route-types)
+  - [11.3.2 Type 2 Route — MAC/IP Advertisement](#1132-type-2-route-macip-advertisement)
+  - [11.3.3 Symmetric IRB — Inter-VNI Routing](#1133-symmetric-irb-inter-vni-routing)
+- [11.4 Open vSwitch (OVS)](#114-open-vswitch-ovs)
+  - [11.4.1 OVS Architecture](#1141-ovs-architecture)
+  - [11.4.2 Basic OVS Configuration](#1142-basic-ovs-configuration)
+  - [11.4.3 VXLAN with EVPN via FRR + OVS](#1143-vxlan-with-evpn-via-frr-ovs)
+  - [11.4.4 OpenFlow Programmability in OVS](#1144-openflow-programmability-in-ovs)
+- [11.5 OVN — Open Virtual Network](#115-ovn-open-virtual-network)
+  - [11.5.1 OVN Architecture](#1151-ovn-architecture)
+  - [11.5.2 Logical Network Configuration](#1152-logical-network-configuration)
+- [Lab Walkthrough 11 — EVPN Fabric with SONiC-VS and FRR](#lab-walkthrough-11-evpn-fabric-with-sonic-vs-and-frr)
+  - [Step 1 — Write the Containerlab topology file](#step-1-write-the-containerlab-topology-file)
+  - [Step 2 — Deploy the lab](#step-2-deploy-the-lab)
+  - [Step 3 — Configure the BGP underlay (eBGP on each leaf)](#step-3-configure-the-bgp-underlay-ebgp-on-each-leaf)
+  - [Step 4 — Configure VXLAN interfaces on each leaf](#step-4-configure-vxlan-interfaces-on-each-leaf)
+  - [Step 5 — Configure FRR EVPN on each leaf](#step-5-configure-frr-evpn-on-each-leaf)
+  - [Step 6 — Verify BGP EVPN routes](#step-6-verify-bgp-evpn-routes)
+  - [Step 7 — Ping from host-a to host-b](#step-7-ping-from-host-a-to-host-b)
+  - [Step 8 — Capture and dissect the VXLAN-encapsulated packet](#step-8-capture-and-dissect-the-vxlan-encapsulated-packet)
+  - [Step 9 — Verify FDB population from EVPN](#step-9-verify-fdb-population-from-evpn)
+  - [Step 10 — Destroy the lab](#step-10-destroy-the-lab)
+- [Summary](#summary)
+- [References](#references)
+
 **Part IV: Overlay & Kubernetes Networking** | ~20 pages
 
 ---

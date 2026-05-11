@@ -1,5 +1,26 @@
 # Appendix H — Bash & SR Linux CLI Reference
 
+
+## Table of Contents
+
+- [Part 1 — Linux / Bash Utilities](#part-1-linux-bash-utilities)
+  - [H.1 Network Inspection](#h1-network-inspection)
+  - [H.2 Hardware Enumeration](#h2-hardware-enumeration)
+  - [H.3 RDMA / InfiniBand Tools](#h3-rdma-infiniband-tools)
+  - [H.4 GPU Management](#h4-gpu-management)
+  - [H.5 Process & Performance](#h5-process-performance)
+  - [H.6 Data Wrangling](#h6-data-wrangling)
+  - [H.7 Remote & Session](#h7-remote-session)
+  - [H.8 Container / Kubernetes Shortcuts](#h8-container-kubernetes-shortcuts)
+- [Part 2 — SR Linux CLI](#part-2-sr-linux-cli)
+  - [H.9 Datastores and Modes](#h9-datastores-and-modes)
+  - [H.10 Navigating the YANG Tree](#h10-navigating-the-yang-tree)
+  - [H.11 Making Configuration Changes](#h11-making-configuration-changes)
+  - [H.12 Operational Commands](#h12-operational-commands)
+  - [H.13 Output Formatting](#h13-output-formatting)
+  - [H.14 One-Shot Execution from Shell](#h14-one-shot-execution-from-shell)
+  - [H.15 Key Differences from IOS / EOS](#h15-key-differences-from-ios-eos)
+
 **Reference cheat sheet for infrastructure engineers running the book's Containerlab labs.**
 Two parts: Linux/Bash utilities grouped by purpose, then SR Linux CLI patterns.
 

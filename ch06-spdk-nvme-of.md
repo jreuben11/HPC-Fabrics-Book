@@ -1,5 +1,36 @@
 # Chapter 6 — SPDK & NVMe-oF
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Ubuntu 24.04 — apt prerequisites](#ubuntu-2404-apt-prerequisites)
+  - [Building SPDK from source](#building-spdk-from-source)
+  - [Python uv setup for management scripts](#python-uv-setup-for-management-scripts)
+- [6.1 Storage as a First-Class Fabric Concern](#61-storage-as-a-first-class-fabric-concern)
+- [6.2 Why Kernel NVMe Is Insufficient](#62-why-kernel-nvme-is-insufficient)
+- [6.3 SPDK Architecture](#63-spdk-architecture)
+  - [6.3.1 Initialization](#631-initialization)
+  - [6.3.2 I/O Submission Model](#632-io-submission-model)
+- [6.4 NVMe-oF: Extending NVMe Over the Fabric](#64-nvme-of-extending-nvme-over-the-fabric)
+  - [6.4.1 Target Configuration](#641-target-configuration)
+  - [6.4.2 Initiator (Host) Connection](#642-initiator-host-connection)
+  - [6.4.3 NVMe-oF TCP for Checkpoint Offload](#643-nvme-of-tcp-for-checkpoint-offload)
+- [6.5 SPDK Blobstore and BlobFS](#65-spdk-blobstore-and-blobfs)
+- [6.6 RAID and Erasure Coding](#66-raid-and-erasure-coding)
+- [Lab Walkthrough 6 — SPDK NVMe-oF Target and fio Benchmark](#lab-walkthrough-6-spdk-nvme-of-target-and-fio-benchmark)
+  - [Step 1 — Clone and build SPDK](#step-1-clone-and-build-spdk)
+  - [Step 2 — Run scripts/setup.sh to bind NVMe to vfio-pci](#step-2-run-scriptssetupsh-to-bind-nvme-to-vfio-pci)
+  - [Step 3 — Test with malloc bdev (no real NVMe needed)](#step-3-test-with-malloc-bdev-no-real-nvme-needed)
+  - [Step 4 — Start nvmf_tgt with TCP transport and malloc bdev](#step-4-start-nvmftgt-with-tcp-transport-and-malloc-bdev)
+  - [Step 5 — Connect from the initiator side with nvme-cli](#step-5-connect-from-the-initiator-side-with-nvme-cli)
+  - [Step 6 — Run fio against the connected NVMe-oF device](#step-6-run-fio-against-the-connected-nvme-of-device)
+  - [Step 7 — Compare QD=1, 4, 16, 64 IOPS — summary table](#step-7-compare-qd1-4-16-64-iops-summary-table)
+  - [Step 8 — Cleanup and verification](#step-8-cleanup-and-verification)
+- [Summary](#summary)
+- [References](#references)
+
 **Part II: Kernel-Bypass & Programmable I/O** | ~20 pages
 
 ---

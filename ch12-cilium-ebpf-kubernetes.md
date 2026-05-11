@@ -1,5 +1,46 @@
 # Chapter 12 — eBPF-Native Kubernetes: Cilium
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Kind](#kind)
+  - [kubectl](#kubectl)
+  - [Helm](#helm)
+  - [Cilium CLI](#cilium-cli)
+  - [Hubble CLI](#hubble-cli)
+  - [Python environment (Kubernetes automation)](#python-environment-kubernetes-automation)
+- [12.1 Why Kubernetes Networking Needed Reinventing](#121-why-kubernetes-networking-needed-reinventing)
+- [12.2 Cilium Architecture](#122-cilium-architecture)
+- [12.3 Cilium Installation (Helm)](#123-cilium-installation-helm)
+- [12.4 CNI Data Path](#124-cni-data-path)
+  - [Packet Flow (pod A → pod B, same node)](#packet-flow-pod-a-pod-b-same-node)
+- [12.5 kube-proxy Replacement](#125-kube-proxy-replacement)
+  - [Service Load Balancing](#service-load-balancing)
+  - [DSR — Direct Server Return](#dsr-direct-server-return)
+- [12.6 Network Policy](#126-network-policy)
+  - [L3/L4 Policy](#l3l4-policy)
+  - [L7 Policy (HTTP)](#l7-policy-http)
+- [12.7 Cilium BGP Control Plane](#127-cilium-bgp-control-plane)
+- [12.8 Hubble — Flow Observability](#128-hubble-flow-observability)
+  - [Hubble Metrics to Prometheus](#hubble-metrics-to-prometheus)
+- [12.9 XDP Acceleration](#129-xdp-acceleration)
+- [Lab Walkthrough 12 — Cilium Policy and Hubble](#lab-walkthrough-12-cilium-policy-and-hubble)
+  - [Step 1 — Write the Kind cluster configuration](#step-1-write-the-kind-cluster-configuration)
+  - [Step 2 — Create the Kind cluster](#step-2-create-the-kind-cluster)
+  - [Step 3 — Install Cilium](#step-3-install-cilium)
+  - [Step 4 — Wait for Cilium to become ready](#step-4-wait-for-cilium-to-become-ready)
+  - [Step 5 — Deploy the trainer and gpu-worker pods](#step-5-deploy-the-trainer-and-gpu-worker-pods)
+  - [Step 6 — Test connectivity BEFORE applying any policy (both directions allowed)](#step-6-test-connectivity-before-applying-any-policy-both-directions-allowed)
+  - [Step 7 — Apply the CiliumNetworkPolicy](#step-7-apply-the-ciliumnetworkpolicy)
+  - [Step 8 — Test connectivity AFTER applying policy](#step-8-test-connectivity-after-applying-policy)
+  - [Step 9 — Observe flows with Hubble](#step-9-observe-flows-with-hubble)
+  - [Step 10 — Port-forward the Hubble UI and interpret the service map](#step-10-port-forward-the-hubble-ui-and-interpret-the-service-map)
+  - [Step 11 — Clean up](#step-11-clean-up)
+- [Summary](#summary)
+- [References](#references)
+
 **Part IV: Overlay & Kubernetes Networking** | ~25 pages
 
 ---

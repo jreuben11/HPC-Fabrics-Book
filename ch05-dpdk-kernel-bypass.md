@@ -1,5 +1,35 @@
 # Chapter 5 — DPDK: Kernel-Bypass Packet Processing
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [Ubuntu 24.04 — apt packages](#ubuntu-2404-apt-packages)
+  - [Building DPDK from source (preferred for latest PMDs)](#building-dpdk-from-source-preferred-for-latest-pmds)
+  - [CMake build system for C examples](#cmake-build-system-for-c-examples)
+- [5.1 The Problem with the Kernel Network Stack](#51-the-problem-with-the-kernel-network-stack)
+- [5.2 DPDK Architecture](#52-dpdk-architecture)
+  - [5.2.1 Environment Abstraction Layer (EAL)](#521-environment-abstraction-layer-eal)
+  - [5.2.2 Hugepages](#522-hugepages)
+  - [5.2.3 CPU Affinity and NUMA](#523-cpu-affinity-and-numa)
+- [5.3 Poll-Mode Drivers (PMDs)](#53-poll-mode-drivers-pmds)
+  - [Device Binding](#device-binding)
+- [5.4 mbuf and Mempool Design](#54-mbuf-and-mempool-design)
+- [5.5 Multi-Queue, RSS, and Flow Director](#55-multi-queue-rss-and-flow-director)
+- [5.6 OVS-DPDK](#56-ovs-dpdk)
+- [5.7 Hardware Offloads via DPDK](#57-hardware-offloads-via-dpdk)
+- [Lab Walkthrough 5 — DPDK l2fwd Benchmarking](#lab-walkthrough-5-dpdk-l2fwd-benchmarking)
+  - [Step 1 — Reserve hugepages and verify](#step-1-reserve-hugepages-and-verify)
+  - [Step 2 — Bind a NIC to vfio-pci (or use net_tap if no spare NIC)](#step-2-bind-a-nic-to-vfio-pci-or-use-nettap-if-no-spare-nic)
+  - [Step 3 — Build l2fwd from DPDK examples](#step-3-build-l2fwd-from-dpdk-examples)
+  - [Step 4 — Run l2fwd with net_tap for software testing](#step-4-run-l2fwd-with-nettap-for-software-testing)
+  - [Step 5 — Interpret output: Mpps and Gbps at different frame sizes](#step-5-interpret-output-mpps-and-gbps-at-different-frame-sizes)
+  - [Step 6 — Enable checksum offload and measure CPU reduction](#step-6-enable-checksum-offload-and-measure-cpu-reduction)
+  - [Step 7 — Verification checklist](#step-7-verification-checklist)
+- [Summary](#summary)
+- [References](#references)
+
 **Part II: Kernel-Bypass & Programmable I/O** | ~25 pages
 
 ---

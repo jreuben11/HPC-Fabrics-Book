@@ -1,5 +1,50 @@
 # Appendix G — RDMA & NCCL Troubleshooting Cookbook
 
+
+## Table of Contents
+
+- [G.1 RDMA Bandwidth Below Expected](#g1-rdma-bandwidth-below-expected)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.2 RDMA Link Errors and Retransmissions](#g2-rdma-link-errors-and-retransmissions)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.3 NCCL AllReduce Hang](#g3-nccl-allreduce-hang)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.4 NCCL Bandwidth Collapse Under Incast](#g4-nccl-bandwidth-collapse-under-incast)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.5 BGP Session Flapping](#g5-bgp-session-flapping)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.6 PFC Deadlock in RoCE Fabric](#g6-pfc-deadlock-in-roce-fabric)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.7 Containerlab Lab Not Converging](#g7-containerlab-lab-not-converging)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [G.8 gNMI Subscribe Getting No Data](#g8-gnmi-subscribe-getting-no-data)
+  - [Problem Statement](#problem-statement)
+  - [Symptoms](#symptoms)
+  - [Diagnostic Commands](#diagnostic-commands)
+  - [Root Causes and Fixes](#root-causes-and-fixes)
+- [General Troubleshooting Tips](#general-troubleshooting-tips)
+
 This appendix is a runbook-style reference for diagnosing and resolving the most common failure modes in AI cluster networking. Each section follows the same structure: problem statement, symptoms, diagnostic commands with expected output, root cause analysis, and remediation steps. Commands are written for Linux with MOFED installed and assume root or a user with `CAP_NET_ADMIN`.
 
 Prerequisite tools referenced throughout:

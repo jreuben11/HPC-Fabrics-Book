@@ -1,5 +1,34 @@
 # Chapter 19 — GPU Collective Communications: Network Interface
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages](#system-packages)
+  - [GPU system path (Option A — skip if CPU-only)](#gpu-system-path-option-a-skip-if-cpu-only)
+  - [CPU-only / Docker simulation path (Option B — used in the lab)](#cpu-only-docker-simulation-path-option-b-used-in-the-lab)
+  - [Python environment (uv)](#python-environment-uv)
+- [19.1 What the Fabric Must Deliver](#191-what-the-fabric-must-deliver)
+- [19.2 NCCL Plugin Architecture](#192-nccl-plugin-architecture)
+  - [Selecting the Transport](#selecting-the-transport)
+- [19.3 SHARP — In-Network Aggregation](#193-sharp-in-network-aggregation)
+- [19.4 Topology-Aware Rank Assignment](#194-topology-aware-rank-assignment)
+- [19.5 RCCL and oneCCL — Fabric Interface Differences](#195-rccl-and-oneccl-fabric-interface-differences)
+- [19.6 NCCL Debugging and Fabric Diagnosis](#196-nccl-debugging-and-fabric-diagnosis)
+- [Lab Walkthrough 19 — Simulating Two NCCL Ranks Over the Socket Backend](#lab-walkthrough-19-simulating-two-nccl-ranks-over-the-socket-backend)
+  - [Step 1: Create the Docker network](#step-1-create-the-docker-network)
+  - [Step 2: Start rank 0 (the root container)](#step-2-start-rank-0-the-root-container)
+  - [Step 3: Start rank 1 (the worker container)](#step-3-start-rank-1-the-worker-container)
+  - [Step 4: Run a minimal NCCL AllReduce test using Python](#step-4-run-a-minimal-nccl-allreduce-test-using-python)
+  - [Step 5: Observe NCCL_DEBUG=INFO output on a GPU system](#step-5-observe-nccldebuginfo-output-on-a-gpu-system)
+  - [Step 6: Compare NCCL_ALGO=Ring vs NCCL_ALGO=Tree](#step-6-compare-ncclalgoring-vs-ncclalgotree)
+  - [Step 7: Capture NCCL socket traffic with tcpdump](#step-7-capture-nccl-socket-traffic-with-tcpdump)
+  - [Step 8: What NCCL_IB_HCA and NCCL_NET=IB would do on a real system](#step-8-what-ncclibhca-and-ncclnetib-would-do-on-a-real-system)
+  - [Step 9: Clean up](#step-9-clean-up)
+- [Summary](#summary)
+- [References](#references)
+
 **Part VI: Storage & Adjacent Infrastructure** | ~10 pages
 
 > **Scope note:** This chapter covers NCCL, RCCL, and oneCCL only from the perspective of what they demand from and expose to the network fabric. The library internals, algorithm selection, and training framework integration are covered in the companion investigation on GPU collective communications.

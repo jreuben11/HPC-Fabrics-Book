@@ -1,5 +1,12 @@
 # Appendix C — RFC & Specification Index
 
+
+## Table of Contents
+
+- [C.1 IETF RFCs](#c1-ietf-rfcs)
+- [C.2 IEEE Standards](#c2-ieee-standards)
+- [C.3 Industry Specifications & Open Standards](#c3-industry-specifications-open-standards)
+
 All RFCs, IEEE standards, and open specifications cited in *The Open AI Network Stack*, listed in numerical order within each category. Short annotations describe the scope and relevance to AI cluster networking. Chapter references indicate where each standard is treated in depth.
 
 ---

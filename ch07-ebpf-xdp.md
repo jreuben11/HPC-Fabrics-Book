@@ -1,5 +1,45 @@
 # Chapter 7 — eBPF & XDP
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages](#system-packages)
+  - [Python scripting environment (uv)](#python-scripting-environment-uv)
+  - [CMake project scaffold for eBPF/XDP](#cmake-project-scaffold-for-ebpfxdp)
+- [7.1 The eBPF Revolution](#71-the-ebpf-revolution)
+- [7.2 The BPF Virtual Machine](#72-the-bpf-virtual-machine)
+- [7.3 BPF Maps](#73-bpf-maps)
+- [7.4 libbpf and CO-RE](#74-libbpf-and-co-re)
+  - [Minimal XDP Program with libbpf](#minimal-xdp-program-with-libbpf)
+- [7.5 XDP — eXpress Data Path](#75-xdp-express-data-path)
+  - [XDP Attachment Modes](#xdp-attachment-modes)
+  - [XDP for DDoS Mitigation in AI Clusters](#xdp-for-ddos-mitigation-in-ai-clusters)
+- [7.6 AF_XDP — Zero-Copy Packet Delivery to User Space](#76-afxdp-zero-copy-packet-delivery-to-user-space)
+- [7.7 TC Hook — Traffic Control eBPF](#77-tc-hook-traffic-control-ebpf)
+- [7.8 bpftool — Inspecting BPF State](#78-bpftool-inspecting-bpf-state)
+- [7.9 Katran — Meta's XDP Load Balancer](#79-katran-metas-xdp-load-balancer)
+- [7.10 netfilter, iptables, nftables & bpfilter: The Packet Filter Stack](#710-netfilter-iptables-nftables-bpfilter-the-packet-filter-stack)
+  - [netfilter and its Hook Points](#netfilter-and-its-hook-points)
+  - [iptables: The Classic Tool and Its Limits](#iptables-the-classic-tool-and-its-limits)
+  - [nftables: The Modern Replacement](#nftables-the-modern-replacement)
+  - [bpfilter: An Abandoned Translation Layer](#bpfilter-an-abandoned-translation-layer)
+  - [How Cilium Replaces kube-proxy](#how-cilium-replaces-kube-proxy)
+  - [Comparison](#comparison)
+  - [Guidance](#guidance)
+- [Lab Walkthrough 7 — XDP Packet Counter to Load Balancer](#lab-walkthrough-7-xdp-packet-counter-to-load-balancer)
+  - [Step 1 — Create a veth pair as a test interface](#step-1-create-a-veth-pair-as-a-test-interface)
+  - [Step 2 — Write the XDP counter program (xdp_prog.bpf.c)](#step-2-write-the-xdp-counter-program-xdpprogbpfc)
+  - [Step 3 — Compile the BPF object with clang](#step-3-compile-the-bpf-object-with-clang)
+  - [Step 4 — Write the userspace loader (loader.c)](#step-4-write-the-userspace-loader-loaderc)
+  - [Step 5 — Attach the program and verify with bpftool](#step-5-attach-the-program-and-verify-with-bpftool)
+  - [Step 6 — Extend to XDP_DROP with a blocklist map](#step-6-extend-to-xdpdrop-with-a-blocklist-map)
+  - [Step 7 — Verify with bpftool prog show and xlated dump](#step-7-verify-with-bpftool-prog-show-and-xlated-dump)
+  - [Step 8 — Detach and verify the interface returns to normal](#step-8-detach-and-verify-the-interface-returns-to-normal)
+- [Summary](#summary)
+- [References](#references)
+
 **Part II: Kernel-Bypass & Programmable I/O** | ~25 pages
 
 ---

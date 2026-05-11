@@ -1,5 +1,40 @@
 # Chapter 14 — Model-Driven Management: NETCONF, YANG & RESTCONF
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System Packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Python Environment (uv)](#python-environment-uv)
+- [14.1 From CLI Scraping to Model-Driven Management](#141-from-cli-scraping-to-model-driven-management)
+- [14.2 YANG — Yet Another Next Generation](#142-yang-yet-another-next-generation)
+  - [14.2.1 Module Structure](#1421-module-structure)
+  - [14.2.2 Core Language Constructs](#1422-core-language-constructs)
+  - [14.2.3 pyang — YANG Tooling](#1423-pyang-yang-tooling)
+- [14.3 NETCONF Protocol](#143-netconf-protocol)
+  - [14.3.1 Datastores](#1431-datastores)
+  - [14.3.2 Operations](#1432-operations)
+  - [14.3.3 Edit-Config Example](#1433-edit-config-example)
+- [14.4 ncclient — Python NETCONF Client](#144-ncclient-python-netconf-client)
+- [14.5 RESTCONF](#145-restconf)
+  - [Base URL Structure](#base-url-structure)
+  - [Examples](#examples)
+  - [RESTCONF Event Streams](#restconf-event-streams)
+- [14.6 OpenConfig YANG Models](#146-openconfig-yang-models)
+- [Lab Walkthrough 14 — NETCONF Automation with ncclient](#lab-walkthrough-14-netconf-automation-with-ncclient)
+  - [Step 1 — Pull the SR Linux Image and Verify Containerlab](#step-1-pull-the-sr-linux-image-and-verify-containerlab)
+  - [Step 2 — Start SR Linux in Containerlab](#step-2-start-sr-linux-in-containerlab)
+  - [Step 3 — Verify NETCONF Accessibility](#step-3-verify-netconf-accessibility)
+  - [Step 4 — Full ncclient Script: Connect, Fetch, Configure, Commit, Verify](#step-4-full-ncclient-script-connect-fetch-configure-commit-verify)
+  - [Step 5 — Use pyang to Render ietf-interfaces as a Tree](#step-5-use-pyang-to-render-ietf-interfaces-as-a-tree)
+  - [Step 6 — Demonstrate Rollback: Intentionally Bad Config, then discard-changes](#step-6-demonstrate-rollback-intentionally-bad-config-then-discard-changes)
+  - [Step 7 — RESTCONF: Equivalent curl Commands for Interface Config](#step-7-restconf-equivalent-curl-commands-for-interface-config)
+  - [Step 8 — deepdiff Between Two JSON Configs](#step-8-deepdiff-between-two-json-configs)
+  - [Step 9 — Cleanup](#step-9-cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part V: Management, Telemetry & Control** | ~20 pages
 
 ---

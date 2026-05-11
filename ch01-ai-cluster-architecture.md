@@ -1,5 +1,43 @@
 # Chapter 1 — Architecture of the AI Cluster Network
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System Packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Containerlab](#containerlab)
+  - [iperf3](#iperf3)
+  - [Verify Prerequisites](#verify-prerequisites)
+- [1.1 Why the Network Is the Bottleneck](#11-why-the-network-is-the-bottleneck)
+- [1.2 Physical Topology Choices](#12-physical-topology-choices)
+  - [1.2.1 Fat-Tree (Clos) Networks](#121-fat-tree-clos-networks)
+  - [1.2.2 Rail-Optimized Fabric](#122-rail-optimized-fabric)
+  - [1.2.3 Dragonfly and Hypercube](#123-dragonfly-and-hypercube)
+- [1.3 Traffic Pattern Taxonomy](#13-traffic-pattern-taxonomy)
+  - [1.3.1 AllReduce (Data Parallelism)](#131-allreduce-data-parallelism)
+  - [1.3.2 Pipeline Parallelism](#132-pipeline-parallelism)
+  - [1.3.3 Tensor Parallelism](#133-tensor-parallelism)
+  - [1.3.4 Checkpoint I/O and Dataset Streaming](#134-checkpoint-io-and-dataset-streaming)
+- [1.4 ECMP Hashing and Flow Collisions](#14-ecmp-hashing-and-flow-collisions)
+- [1.5 Bandwidth and Latency Requirements](#15-bandwidth-and-latency-requirements)
+- [1.6 The Full Stack, Layer by Layer](#16-the-full-stack-layer-by-layer)
+- [Lab Walkthrough 1 — Containerlab 2-Spine/2-Leaf ECMP Topology](#lab-walkthrough-1-containerlab-2-spine2-leaf-ecmp-topology)
+  - [Step 1: Verify the environment](#step-1-verify-the-environment)
+  - [Step 2: Create the Containerlab topology file](#step-2-create-the-containerlab-topology-file)
+  - [Step 3: Deploy the topology](#step-3-deploy-the-topology)
+  - [Step 4: Verify all containers are running](#step-4-verify-all-containers-are-running)
+  - [Step 5: Inspect SR Linux interface state on leaf1](#step-5-inspect-sr-linux-interface-state-on-leaf1)
+  - [Step 6: Configure IP addresses and static routes on SR Linux nodes](#step-6-configure-ip-addresses-and-static-routes-on-sr-linux-nodes)
+  - [Step 7: Verify ECMP routes on leaf1](#step-7-verify-ecmp-routes-on-leaf1)
+  - [Step 8: Assign IP addresses to host containers](#step-8-assign-ip-addresses-to-host-containers)
+  - [Step 9: Run iperf3 bandwidth test across the fabric](#step-9-run-iperf3-bandwidth-test-across-the-fabric)
+  - [Step 10: Observe ECMP path distribution](#step-10-observe-ecmp-path-distribution)
+  - [Step 11: Observe flow hashing with different source ports](#step-11-observe-flow-hashing-with-different-source-ports)
+  - [Step 12: Tear down the lab](#step-12-tear-down-the-lab)
+- [Summary](#summary)
+- [References](#references)
+
 **Part I: Foundations** | ~15 pages
 
 ---

@@ -1,5 +1,53 @@
 # Chapter 8 — Open Network Operating Systems
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Short explanations of relevant networking protocols](#short-explanations-of-relevant-networking-protocols)
+- [Short explanations of network automation technologies](#short-explanations-of-network-automation-technologies)
+- [Installation](#installation)
+  - [Docker](#docker)
+  - [Containerlab](#containerlab)
+  - [gnmic](#gnmic)
+  - [FRR (for host router containers)](#frr-for-host-router-containers)
+  - [Python automation environment (uv)](#python-automation-environment-uv)
+- [8.1 The End of the Monolithic Network Appliance](#81-the-end-of-the-monolithic-network-appliance)
+- [8.2 SONiC — Software for Open Networking in the Cloud](#82-sonic-software-for-open-networking-in-the-cloud)
+  - [8.2.1 Architecture Overview](#821-architecture-overview)
+  - [8.2.2 Redis ConfigDB](#822-redis-configdb)
+  - [8.2.3 SONiC Container Management](#823-sonic-container-management)
+  - [8.2.4 SONiC-VS — Virtual SONiC for Development](#824-sonic-vs-virtual-sonic-for-development)
+- [8.3 SR Linux — Nokia's Programmable NOS](#83-sr-linux-nokias-programmable-nos)
+  - [8.3.1 Design Principles](#831-design-principles)
+  - [8.3.2 YANG-Native Configuration](#832-yang-native-configuration)
+  - [8.3.3 gNMI-First Access](#833-gnmi-first-access)
+  - [8.3.4 NDK — Network Developer Kit](#834-ndk-network-developer-kit)
+- [8.4 FRRouting (FRR)](#84-frrouting-frr)
+  - [8.4.1 Daemon Architecture](#841-daemon-architecture)
+  - [8.4.2 BGP for AI Cluster Underlay](#842-bgp-for-ai-cluster-underlay)
+  - [8.4.3 EVPN in FRR](#843-evpn-in-frr)
+  - [8.4.4 BFD — Fast Failure Detection](#844-bfd-fast-failure-detection)
+- [8.5 Choosing Between SONiC and SR Linux](#85-choosing-between-sonic-and-sr-linux)
+- [8.6 Additional FOSS NOSes and RTOSes](#86-additional-foss-noses-and-rtoses)
+  - [8.6.1 VyOS](#861-vyos)
+  - [8.6.2 DENT](#862-dent)
+  - [8.6.3 OpenWrt](#863-openwrt)
+  - [8.6.4 FreeRTOS](#864-freertos)
+  - [8.6.5 Zephyr](#865-zephyr)
+- [Lab Walkthrough 8 — Spine-Leaf Fabric with SONiC-VS and SR Linux](#lab-walkthrough-8-spine-leaf-fabric-with-sonic-vs-and-sr-linux)
+  - [Step 1 — Pull the NOS container images](#step-1-pull-the-nos-container-images)
+  - [Step 2 — Write the Containerlab topology YAML](#step-2-write-the-containerlab-topology-yaml)
+  - [Step 3 — Deploy the topology](#step-3-deploy-the-topology)
+  - [Step 4 — Configure eBGP on SR Linux spine1](#step-4-configure-ebgp-on-sr-linux-spine1)
+  - [Step 5 — Configure BGP on SONiC-VS leaf1](#step-5-configure-bgp-on-sonic-vs-leaf1)
+  - [Step 6 — Verify BGP convergence and ECMP on the spines](#step-6-verify-bgp-convergence-and-ecmp-on-the-spines)
+  - [Step 7 — Simulate a BFD link failure and time BGP withdrawal](#step-7-simulate-a-bfd-link-failure-and-time-bgp-withdrawal)
+  - [Step 8 — Subscribe to SR Linux interface counters via gnmic](#step-8-subscribe-to-sr-linux-interface-counters-via-gnmic)
+  - [Step 9 — Tear down the lab](#step-9-tear-down-the-lab)
+- [Summary](#summary)
+- [References](#references)
+
 **Part III: Programmable Fabric** | ~25 pages 
 
 ---

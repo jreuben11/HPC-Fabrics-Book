@@ -1,5 +1,46 @@
 # Appendix J — AI Cluster Network Reference Architectures
 
+
+## Table of Contents
+
+- [J.1 Design Principles and Conventions](#j1-design-principles-and-conventions)
+- [J.2 64-GPU Cluster — Single-Rack Design](#j2-64-gpu-cluster-single-rack-design)
+  - [J.2.1 Overview](#j21-overview)
+  - [J.2.2 ASCII Topology](#j22-ascii-topology)
+  - [J.2.3 Port Budget Table](#j23-port-budget-table)
+  - [J.2.4 Oversubscription Calculation](#j24-oversubscription-calculation)
+  - [J.2.5 Storage Network Design](#j25-storage-network-design)
+  - [J.2.6 OOB Management Network](#j26-oob-management-network)
+  - [J.2.7 Cable Count Estimate](#j27-cable-count-estimate)
+- [J.3 512-GPU Cluster — Four-Rack Pod Design](#j3-512-gpu-cluster-four-rack-pod-design)
+  - [J.3.1 Overview](#j31-overview)
+  - [J.3.2 ASCII Topology](#j32-ascii-topology)
+  - [J.3.3 Port Budget Table](#j33-port-budget-table)
+  - [J.3.4 Oversubscription Calculation](#j34-oversubscription-calculation)
+  - [J.3.5 Storage Network Design](#j35-storage-network-design)
+  - [J.3.6 In-Band Management VRF](#j36-in-band-management-vrf)
+  - [J.3.7 OOB Management Network](#j37-oob-management-network)
+  - [J.3.8 Cable Count Estimate](#j38-cable-count-estimate)
+- [J.4 4096-GPU Cluster — 32-Rack Multi-Pod Design](#j4-4096-gpu-cluster-32-rack-multi-pod-design)
+  - [J.4.1 Overview](#j41-overview)
+  - [J.4.2 ASCII Topology](#j42-ascii-topology)
+  - [J.4.3 Port Budget Table](#j43-port-budget-table)
+  - [J.4.4 Oversubscription Calculation](#j44-oversubscription-calculation)
+  - [J.4.5 Storage Network: RoCEv2 vs InfiniBand Decision Matrix](#j45-storage-network-rocev2-vs-infiniband-decision-matrix)
+  - [J.4.6 OOB Management Network](#j46-oob-management-network)
+  - [J.4.7 PTP Grandmaster Placement](#j47-ptp-grandmaster-placement)
+  - [J.4.8 Cable Count Estimate](#j48-cable-count-estimate)
+- [J.5 Management Plane Topology](#j5-management-plane-topology)
+  - [J.5.1 OOB Network Design](#j51-oob-network-design)
+  - [J.5.2 Bastion / Jump Host Pattern](#j52-bastion-jump-host-pattern)
+  - [J.5.3 In-Band Management VRF](#j53-in-band-management-vrf)
+- [J.6 Cable and Fibre Planning](#j6-cable-and-fibre-planning)
+  - [J.6.1 Cable Technology Selection by Reach and Tier](#j61-cable-technology-selection-by-reach-and-tier)
+  - [J.6.2 MPO Trunk Routing](#j62-mpo-trunk-routing)
+  - [J.6.3 Cabling Discipline](#j63-cabling-discipline)
+- [J.7 Cross-Reference Summary](#j7-cross-reference-summary)
+- [J.8 References](#j8-references)
+
 This appendix provides end-to-end network designs for three GPU cluster scales: 64 GPUs (single rack), 512 GPUs (four-rack pod), and 4096 GPUs (32-rack multi-pod). Each design includes an ASCII topology diagram, port budget table, oversubscription calculation, NIC configuration, storage network, OOB management network, and estimated cable counts. The three designs form a coherent progression — each tier reuses and extends the patterns of the tier below it.
 
 Cross-references point to the relevant chapters and appendices throughout the book.

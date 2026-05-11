@@ -1,5 +1,34 @@
 # Chapter 20 — Distributed Training Runtimes: Fabric Demands
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages](#system-packages)
+  - [Python environment (uv)](#python-environment-uv)
+- [20.1 The Network Engineer's View of Training Runtimes](#201-the-network-engineers-view-of-training-runtimes)
+- [20.2 Data Parallel: DDP and FSDP](#202-data-parallel-ddp-and-fsdp)
+  - [PyTorch DDP (Distributed Data Parallel)](#pytorch-ddp-distributed-data-parallel)
+  - [PyTorch FSDP (Fully Sharded Data Parallel)](#pytorch-fsdp-fully-sharded-data-parallel)
+- [20.3 Pipeline Parallelism](#203-pipeline-parallelism)
+- [20.4 Tensor Parallelism (Megatron-LM)](#204-tensor-parallelism-megatron-lm)
+- [20.5 DeepSpeed ZeRO Stages](#205-deepspeed-zero-stages)
+- [20.6 Ray — Distributed Task and Object Scheduling](#206-ray-distributed-task-and-object-scheduling)
+- [20.7 Ports and Firewall Considerations](#207-ports-and-firewall-considerations)
+- [Lab Walkthrough 20 — Traffic Pattern Analysis with tcpdump and PyTorch Distributed](#lab-walkthrough-20-traffic-pattern-analysis-with-tcpdump-and-pytorch-distributed)
+  - [Step 1: Write the two-rank AllReduce script](#step-1-write-the-two-rank-allreduce-script)
+  - [Step 2: Start a tcpdump capture on the loopback interface](#step-2-start-a-tcpdump-capture-on-the-loopback-interface)
+  - [Step 3: Run the AllReduce script with torchrun](#step-3-run-the-allreduce-script-with-torchrun)
+  - [Step 4: Analyze the capture with tshark](#step-4-analyze-the-capture-with-tshark)
+  - [Step 5: Add TORCH_DISTRIBUTED_DEBUG=DETAIL and read the log](#step-5-add-torchdistributeddebugdetail-and-read-the-log)
+  - [Step 6: Plot time vs size to understand fabric implications](#step-6-plot-time-vs-size-to-understand-fabric-implications)
+  - [Step 7: Verify with TORCH_DISTRIBUTED_DEBUG on a timeout scenario](#step-7-verify-with-torchdistributeddebug-on-a-timeout-scenario)
+  - [Step 8: Brief comparison — what NCCL + RDMA would show](#step-8-brief-comparison-what-nccl-rdma-would-show)
+  - [Step 9: Clean up](#step-9-clean-up)
+- [Summary](#summary)
+- [References](#references)
+
 **Part VI: Storage & Adjacent Infrastructure** | ~10 pages
 
 > **Scope note:** PyTorch Distributed, DeepSpeed, Ray, Horovod, and Megatron-LM are covered in depth in the companion investigation on distributed AI training. This chapter focuses exclusively on the traffic patterns and fabric requirements each runtime imposes — the network engineer's view.

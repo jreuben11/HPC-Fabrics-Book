@@ -1,5 +1,46 @@
 # Chapter 15 — gNMI & OpenConfig Streaming Telemetry
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Python environment (uv)](#python-environment-uv)
+- [15.1 From SNMP Polling to Streaming Telemetry](#151-from-snmp-polling-to-streaming-telemetry)
+- [15.2 gNMI Protocol](#152-gnmi-protocol)
+  - [15.2.1 Path Notation](#1521-path-notation)
+  - [15.2.2 Subscribe Modes](#1522-subscribe-modes)
+- [15.3 gnmic — CLI Client](#153-gnmic-cli-client)
+  - [Installation](#installation)
+  - [Capabilities](#capabilities)
+  - [Get](#get)
+  - [Subscribe (Streaming)](#subscribe-streaming)
+  - [gnmic Configuration File](#gnmic-configuration-file)
+- [15.4 OpenConfig Models in Depth](#154-openconfig-models-in-depth)
+  - [Interface Counters](#interface-counters)
+  - [BGP Neighbor State](#bgp-neighbor-state)
+  - [Platform / Hardware](#platform-hardware)
+- [15.5 Telemetry Pipeline Architecture](#155-telemetry-pipeline-architecture)
+  - [gnmic → Prometheus](#gnmic-prometheus)
+  - [PromQL for AI Cluster Monitoring](#promql-for-ai-cluster-monitoring)
+- [15.6 Dial-Out Telemetry](#156-dial-out-telemetry)
+- [Lab Walkthrough 15 — gNMI Streaming Dashboard](#lab-walkthrough-15-gnmi-streaming-dashboard)
+  - [Step 1 — Write the Containerlab topology file](#step-1-write-the-containerlab-topology-file)
+  - [Step 2 — Confirm gnmic is installed and query capabilities](#step-2-confirm-gnmic-is-installed-and-query-capabilities)
+  - [Step 3 — Get a single interface's state with full JSON output](#step-3-get-a-single-interfaces-state-with-full-json-output)
+  - [Step 4 — Write gnmic-config.yaml with two subscriptions](#step-4-write-gnmic-configyaml-with-two-subscriptions)
+  - [Step 5 — Run gnmic as a daemon with Prometheus output](#step-5-run-gnmic-as-a-daemon-with-prometheus-output)
+  - [Step 6 — Verify metrics at localhost:9273/metrics](#step-6-verify-metrics-at-localhost9273metrics)
+  - [Step 7 — Add the gnmic scrape target to prometheus.yml](#step-7-add-the-gnmic-scrape-target-to-prometheusyml)
+  - [Step 8 — Start Prometheus and open the console](#step-8-start-prometheus-and-open-the-console)
+  - [Step 9 — Run a PromQL query for interface throughput in Gbps](#step-9-run-a-promql-query-for-interface-throughput-in-gbps)
+  - [Step 10 — Generate traffic with iperf3 and watch the metric update](#step-10-generate-traffic-with-iperf3-and-watch-the-metric-update)
+  - [Step 11 — Kill the BGP session and watch the on-change notification fire](#step-11-kill-the-bgp-session-and-watch-the-on-change-notification-fire)
+  - [Cleanup](#cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part V: Management, Telemetry & Control** | ~20 pages
 
 ---

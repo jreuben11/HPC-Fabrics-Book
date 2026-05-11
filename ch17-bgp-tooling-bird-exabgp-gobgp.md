@@ -1,5 +1,40 @@
 # Chapter 17 — BGP Tooling: BIRD, ExaBGP & GoBGP
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [GoBGP — binary release (recommended)](#gobgp-binary-release-recommended)
+  - [Python environment (ExaBGP scripting + GoBGP gRPC client)](#python-environment-exabgp-scripting-gobgp-grpc-client)
+  - [Generate Python gRPC stubs from GoBGP's proto file](#generate-python-grpc-stubs-from-gobgps-proto-file)
+- [17.1 Beyond FRR: Specialized BGP Use Cases](#171-beyond-frr-specialized-bgp-use-cases)
+- [17.2 BIRD](#172-bird)
+  - [Configuration Example — Route Reflector](#configuration-example-route-reflector)
+- [17.3 ExaBGP](#173-exabgp)
+  - [Health-Checked Anycast with ExaBGP](#health-checked-anycast-with-exabgp)
+- [17.4 GoBGP — Python gRPC Client](#174-gobgp-python-grpc-client)
+  - [17.4.1 Connecting and listing peers](#1741-connecting-and-listing-peers)
+  - [17.4.2 Announcing and withdrawing prefixes](#1742-announcing-and-withdrawing-prefixes)
+  - [17.4.3 Reading the RIB](#1743-reading-the-rib)
+- [Summary](#summary)
+- [Lab Walkthrough 17 — Two-Namespace BGP Peering: BIRD as Route Reflector, GoBGP as Client, ExaBGP Health-Check Injection](#lab-walkthrough-17-two-namespace-bgp-peering-bird-as-route-reflector-gobgp-as-client-exabgp-health-check-injection)
+  - [Step 1 — Create two network namespaces connected by a veth pair](#step-1-create-two-network-namespaces-connected-by-a-veth-pair)
+  - [Step 2 — Write the BIRD configuration (Route Reflector, AS 65000)](#step-2-write-the-bird-configuration-route-reflector-as-65000)
+  - [Step 3 — Start BIRD inside ns-bird](#step-3-start-bird-inside-ns-bird)
+  - [Step 4 — Write the GoBGP configuration (AS 65100, peer to BIRD)](#step-4-write-the-gobgp-configuration-as-65100-peer-to-bird)
+  - [Step 5 — Start GoBGP daemon inside ns-gobgp and prepare Python stubs](#step-5-start-gobgp-daemon-inside-ns-gobgp-and-prepare-python-stubs)
+  - [Step 6 — Verify BGP session is Established](#step-6-verify-bgp-session-is-established)
+  - [Step 7 — Announce a prefix from GoBGP via Python gRPC and verify BIRD receives it](#step-7-announce-a-prefix-from-gobgp-via-python-grpc-and-verify-bird-receives-it)
+  - [Step 8 — Announce a second prefix and verify RIB growth](#step-8-announce-a-second-prefix-and-verify-rib-growth)
+  - [Step 9 — ExaBGP: configure health-check anycast injection](#step-9-exabgp-configure-health-check-anycast-injection)
+  - [Step 10 — Start ExaBGP and observe initial announcement](#step-10-start-exabgp-and-observe-initial-announcement)
+  - [Step 11 — Simulate unhealthy: withdraw the VIP](#step-11-simulate-unhealthy-withdraw-the-vip)
+  - [Step 12 — Query GoBGP RIB and peer state via Python gRPC](#step-12-query-gobgp-rib-and-peer-state-via-python-grpc)
+  - [Step 13 — Cleanup](#step-13-cleanup)
+- [References](#references)
+
 **Part V: Management, Telemetry & Control** | ~5 pages
 
 ---

@@ -1,5 +1,40 @@
 # Chapter 16 — Observability Pipeline: OpenTelemetry, Prometheus & Grafana
 
+
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Installation](#installation)
+  - [System packages (Ubuntu 24.04)](#system-packages-ubuntu-2404)
+  - [Python environment (uv)](#python-environment-uv)
+- [16.1 The Three Pillars — Applied to AI Clusters](#161-the-three-pillars-applied-to-ai-clusters)
+- [16.2 OpenTelemetry](#162-opentelemetry)
+  - [16.2.1 OTel Collector Configuration](#1621-otel-collector-configuration)
+- [16.3 Prometheus and Exporters](#163-prometheus-and-exporters)
+  - [Key Exporters for AI Clusters](#key-exporters-for-ai-clusters)
+  - [Kubernetes Deployment](#kubernetes-deployment)
+  - [DCGM Exporter for GPU Metrics](#dcgm-exporter-for-gpu-metrics)
+  - [Critical PromQL Queries](#critical-promql-queries)
+- [16.4 Grafana Dashboards](#164-grafana-dashboards)
+  - [Essential Dashboard Panels for AI Clusters](#essential-dashboard-panels-for-ai-clusters)
+- [16.5 Hubble Integration](#165-hubble-integration)
+- [16.6 Telegraf for Infrastructure Metrics](#166-telegraf-for-infrastructure-metrics)
+- [Lab Walkthrough 16 — Full Observability Stack](#lab-walkthrough-16-full-observability-stack)
+  - [Step 1 — Write the full docker-compose.yaml](#step-1-write-the-full-docker-composeyaml)
+  - [Step 2 — Write otelcol-config.yaml](#step-2-write-otelcol-configyaml)
+  - [Step 3 — Write prometheus.yml and start all containers](#step-3-write-prometheusyml-and-start-all-containers)
+  - [Step 4 — Verify node_exporter is running on the host](#step-4-verify-nodeexporter-is-running-on-the-host)
+  - [Step 5 — Configure Prometheus scrape targets via prometheus.yml](#step-5-configure-prometheus-scrape-targets-via-prometheusyml)
+  - [Step 6 — Open Grafana and add the Prometheus datasource](#step-6-open-grafana-and-add-the-prometheus-datasource)
+  - [Step 7 — Import the node_exporter dashboard (ID 1860)](#step-7-import-the-nodeexporter-dashboard-id-1860)
+  - [Step 8 — Run a drop rate PromQL query in Grafana Explore](#step-8-run-a-drop-rate-promql-query-in-grafana-explore)
+  - [Step 9 — Simulate congestion with tc netem and watch the drop counter](#step-9-simulate-congestion-with-tc-netem-and-watch-the-drop-counter)
+  - [Step 10 — Set up a Grafana Alert Rule for drop rate > 0 for 30s](#step-10-set-up-a-grafana-alert-rule-for-drop-rate-0-for-30s)
+  - [Step 11 — Remove the netem rule and watch the alert resolve](#step-11-remove-the-netem-rule-and-watch-the-alert-resolve)
+  - [Cleanup](#cleanup)
+- [Summary](#summary)
+- [References](#references)
+
 **Part V: Management, Telemetry & Control** | ~15 pages
 
 ---
