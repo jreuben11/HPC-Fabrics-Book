@@ -3,41 +3,43 @@
 
 ## Table of Contents
 
-- [Introduction](#introduction)
-- [34.1 The Bandwidth-Delay Product Problem in AI Fabrics](#341-the-bandwidth-delay-product-problem-in-ai-fabrics)
-- [34.2 DCQCN In Depth](#342-dcqcn-in-depth)
-  - [34.2.1 ECN Marking at the Switch](#3421-ecn-marking-at-the-switch)
-  - [34.2.2 The DCQCN Rate-Control State Machine](#3422-the-dcqcn-rate-control-state-machine)
-  - [34.2.3 Configuring DCQCN with mlxconfig and mlxreg](#3423-configuring-dcqcn-with-mlxconfig-and-mlxreg)
-- [34.3 PFC and Its Pathologies](#343-pfc-and-its-pathologies)
-- [34.4 Beyond DCQCN: Alternative Congestion Control Algorithms](#344-beyond-dcqcn-alternative-congestion-control-algorithms)
-  - [34.4.1 TIMELY — RTT-Gradient-Based Control (Microsoft/Google, SIGCOMM 2015)](#3441-timely-rtt-gradient-based-control-microsoftgoogle-sigcomm-2015)
-  - [34.4.2 Swift — Decomposed RTT-Based Control (Google, SIGCOMM 2020)](#3442-swift-decomposed-rtt-based-control-google-sigcomm-2020)
-  - [34.4.3 HPCC — INT-Feedback Precise Rate Control (Alibaba, SIGCOMM 2019)](#3443-hpcc-int-feedback-precise-rate-control-alibaba-sigcomm-2019)
-  - [34.4.4 Comparison Table](#3444-comparison-table)
-- [34.5 RoCEv2's Reorder Intolerance](#345-rocev2s-reorder-intolerance)
-- [34.6 The Ultra Ethernet Consortium (UEC)](#346-the-ultra-ethernet-consortium-uec)
-  - [34.6.1 Formation and Goals](#3461-formation-and-goals)
-  - [34.6.2 The Ultra Ethernet Specification](#3462-the-ultra-ethernet-specification)
-  - [34.6.3 UET Architecture and Stack Layers](#3463-uet-architecture-and-stack-layers)
-  - [34.6.4 Reliable Unordered Delivery (RUD) and Packet Spraying](#3464-reliable-unordered-delivery-rud-and-packet-spraying)
-  - [34.6.5 NSCC: Network Signal-Based Congestion Control](#3465-nscc-network-signal-based-congestion-control)
-  - [34.6.6 RCCC: Receiver Credit-Based Congestion Control](#3466-rccc-receiver-credit-based-congestion-control)
-  - [34.6.7 Link Level Retry (LLR) — Replacing PFC](#3467-link-level-retry-llr-replacing-pfc)
-  - [34.6.8 Credit-Based Flow Control (CBFC)](#3468-credit-based-flow-control-cbfc)
-  - [34.6.9 UEC vs. InfiniBand and RoCEv2](#3469-uec-vs-infiniband-and-rocev2)
-  - [34.6.10 Deployment Outlook](#34610-deployment-outlook)
-- [34.7 Lossless vs. Lossy Fabric: The PFC Elimination Path](#347-lossless-vs-lossy-fabric-the-pfc-elimination-path)
-- [34.8 Lab: DCQCN Parameter Sweep with Soft-RoCE, ECN Measurement, and Queue Visualisation](#348-lab-dcqcn-parameter-sweep-with-soft-roce-ecn-measurement-and-queue-visualisation)
-  - [Step 1: Install prerequisites](#step-1-install-prerequisites)
-  - [Step 2: Create soft-RoCE devices over loopback](#step-2-create-soft-roce-devices-over-loopback)
-  - [Step 3: Install ECN-marking RED qdisc (simulating switch-side CP)](#step-3-install-ecn-marking-red-qdisc-simulating-switch-side-cp)
-  - [Step 4: Run RDMA bandwidth test and observe ECN counters](#step-4-run-rdma-bandwidth-test-and-observe-ecn-counters)
-  - [Step 5: Observe CNP generation (NP role)](#step-5-observe-cnp-generation-np-role)
-  - [Step 6: Parameter sweep — vary K_min and measure throughput](#step-6-parameter-sweep-vary-kmin-and-measure-throughput)
-  - [Step 7: Cleanup](#step-7-cleanup)
-- [34.9 Summary](#349-summary)
-- [References](#references)
+- [Chapter 34 — Congestion Control \& the Ultra Ethernet Consortium](#chapter-34--congestion-control--the-ultra-ethernet-consortium)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [34.1 The Bandwidth-Delay Product Problem in AI Fabrics](#341-the-bandwidth-delay-product-problem-in-ai-fabrics)
+  - [34.2 DCQCN In Depth](#342-dcqcn-in-depth)
+    - [34.2.1 ECN Marking at the Switch](#3421-ecn-marking-at-the-switch)
+    - [34.2.2 The DCQCN Rate-Control State Machine](#3422-the-dcqcn-rate-control-state-machine)
+    - [34.2.3 Configuring DCQCN with mlxconfig and mlxreg](#3423-configuring-dcqcn-with-mlxconfig-and-mlxreg)
+  - [34.3 PFC and Its Pathologies](#343-pfc-and-its-pathologies)
+  - [34.4 Beyond DCQCN: Alternative Congestion Control Algorithms](#344-beyond-dcqcn-alternative-congestion-control-algorithms)
+    - [34.4.1 TIMELY — RTT-Gradient-Based Control (Microsoft/Google, SIGCOMM 2015)](#3441-timely--rtt-gradient-based-control-microsoftgoogle-sigcomm-2015)
+    - [34.4.2 Swift — Decomposed RTT-Based Control (Google, SIGCOMM 2020)](#3442-swift--decomposed-rtt-based-control-google-sigcomm-2020)
+    - [34.4.3 HPCC — INT-Feedback Precise Rate Control (Alibaba, SIGCOMM 2019)](#3443-hpcc--int-feedback-precise-rate-control-alibaba-sigcomm-2019)
+    - [34.4.4 Comparison Table](#3444-comparison-table)
+  - [34.5 RoCEv2's Reorder Intolerance](#345-rocev2s-reorder-intolerance)
+  - [34.6 The Ultra Ethernet Consortium (UEC)](#346-the-ultra-ethernet-consortium-uec)
+    - [34.6.1 Formation and Goals](#3461-formation-and-goals)
+    - [34.6.2 The Ultra Ethernet Specification](#3462-the-ultra-ethernet-specification)
+    - [34.6.3 UET Architecture and Stack Layers](#3463-uet-architecture-and-stack-layers)
+    - [34.6.4 Reliable Unordered Delivery (RUD) and Packet Spraying](#3464-reliable-unordered-delivery-rud-and-packet-spraying)
+    - [34.6.5 NSCC: Network Signal-Based Congestion Control](#3465-nscc-network-signal-based-congestion-control)
+    - [34.6.6 RCCC: Receiver Credit-Based Congestion Control](#3466-rccc-receiver-credit-based-congestion-control)
+    - [34.6.7 Link Level Retry (LLR) — Replacing PFC](#3467-link-level-retry-llr--replacing-pfc)
+    - [34.6.8 Credit-Based Flow Control (CBFC)](#3468-credit-based-flow-control-cbfc)
+    - [34.6.9 UEC vs. InfiniBand and RoCEv2](#3469-uec-vs-infiniband-and-rocev2)
+    - [34.6.10 Deployment Outlook](#34610-deployment-outlook)
+  - [34.7 Lossless vs. Lossy Fabric: The PFC Elimination Path](#347-lossless-vs-lossy-fabric-the-pfc-elimination-path)
+  - [34.8 Lab: DCQCN Parameter Sweep with Soft-RoCE, ECN Measurement, and Queue Visualisation](#348-lab-dcqcn-parameter-sweep-with-soft-roce-ecn-measurement-and-queue-visualisation)
+    - [Step 1: Install prerequisites](#step-1-install-prerequisites)
+    - [Step 2: Create soft-RoCE devices over loopback](#step-2-create-soft-roce-devices-over-loopback)
+    - [Step 3: Install ECN-marking RED qdisc (simulating switch-side CP)](#step-3-install-ecn-marking-red-qdisc-simulating-switch-side-cp)
+    - [Step 4: Run RDMA bandwidth test and observe ECN counters](#step-4-run-rdma-bandwidth-test-and-observe-ecn-counters)
+    - [Step 5: Observe CNP generation (NP role)](#step-5-observe-cnp-generation-np-role)
+    - [Step 6: Parameter sweep — vary K\_min and measure throughput](#step-6-parameter-sweep--vary-k_min-and-measure-throughput)
+    - [Step 7: Cleanup](#step-7-cleanup)
+  - [34.9 Summary](#349-summary)
+  - [References](#references)
 
 **Part VI: Storage & Adjacent Infrastructure** | ~15 pages
 
@@ -57,7 +59,7 @@ Cross-references: RoCEv2 transport basics are covered in *(see Chapter 2)*; PFC 
 
 ## 34.1 The Bandwidth-Delay Product Problem in AI Fabrics
 
-Congestion control in classical TCP operates at millisecond timescales and tolerates occasional packet loss as a signal. RDMA over Ethernet operates in a completely different regime. A single **InfiniBand-equivalent** message may be 256 MB or larger; the receiving QP (Queue Pair) has no TCP-style retransmit; and a single dropped or severely out-of-order packet forces a costly QP-level recovery that can take tens of milliseconds.
+Congestion control in classical TCP operates at millisecond timescales and tolerates occasional packet loss as a signal. RDMA over Ethernet operates in a completely different regime. A single **InfiniBand-equivalent** message may be 256 MB or larger; the receiving **QP (Queue Pair)** has no TCP-style retransmit; and a single dropped or severely out-of-order packet forces a costly QP-level recovery that can take tens of milliseconds.
 
 The **bandwidth-delay product (BDP)** quantifies the problem: at 400 Gb/s with a 1 µs switch-to-switch propagation delay, the pipe holds 50 KB of data per hop. A fat-tree with four hops holds 200 KB in flight per flow. At 1,000 concurrent flows this is 200 MB of live data in the network fabric at any instant. Even a 1% burst above line rate fills queues in microseconds.
 
@@ -73,7 +75,7 @@ This loop, when properly tuned, keeps queue occupancy well below the PFC trigger
 
 ## 34.2 DCQCN In Depth
 
-**DCQCN** (Data Center Quantized Congestion Notification) was introduced by Zhu *et al.* at Microsoft and Mellanox at SIGCOMM 2015. It draws inspiration from **QCN** (Quantized Congestion Notification, IEEE 802.1Qau, 2010) but operates at Layer 3 over RoCEv2/UDP/IP rather than at Layer 2, and remains a vendor-implemented algorithm rather than an IEEE-standardised protocol. DCQCN combines switch-based **RED** (Random Early Detection) ECN marking with a NIC-side rate control algorithm.
+**DCQCN** (Data Center Quantized Congestion Notification) was introduced by Zhu *et al.* at Microsoft and Mellanox at SIGCOMM 2015. It draws inspiration from **QCN** (Quantized Congestion Notification, IEEE 802.1Qau, 2010) but operates at Layer 3 over RoCEv2/UDP/IP rather than at Layer 2, and remains a vendor-implemented algorithm rather than an IEEE-standardised protocol. DCQCN combines switch-based **RED** (**Random Early Detection**) ECN marking with a NIC-side rate control algorithm.
 
 ### 34.2.1 ECN Marking at the Switch
 
