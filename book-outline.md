@@ -157,6 +157,7 @@ Wiring GPU pods into the fabric through container networking and overlay protoco
 
 ### Chapter 11 — Overlay Networks: BGP-EVPN, VXLAN, OVS & OVN (20 pp)
 - VXLAN encapsulation (RFC 7348): VTEP model, UDP outer header, multicast vs ingress-replication
+- First-principles exercise: hand-building a two-VTEP VXLAN tunnel with `ip netns` and no control plane, before BGP-EVPN automates it
 - BGP EVPN control plane (RFC 7432, RFC 8365): route types 2/3/5, MAC/IP advertisement, symmetric IRB
 - Open vSwitch: flow table model, OpenFlow multi-table pipeline, OVS-DPDK fast path
 - OVN logical topology: logical switches/routers, ACLs, load balancers — mapping to OVS flows
@@ -311,12 +312,15 @@ Closing the loop: validating the full stack in software before touching hardware
 - CI integration: running Containerlab topologies in GitHub Actions / GitLab CI
 - `vrnetlab` for VM-based routers (vMX, vSRX, CSR1000v) alongside containers
 - Alternative emulators: GNS3 (GUI-based, large appliance library, real IOS/IOS-XE images) and EVE-NG (browser-based, multi-user, free Community tier) — when to prefer them over Containerlab's IaC approach
+- Alternative topology-as-code on Kubernetes: `openconfig/kne` (KNE) — textproto topologies, Meshnet CNI pod-to-pod wiring, per-vendor operators, multi-node scale for OpenConfig `ondatra` compliance suites
 - *Lab: build a full 2-spine 4-leaf topology with BGP-EVPN, RDMA secondary interfaces, and Cilium overlay*
 
 ### Chapter 22 — Network CI & Configuration Validation (15 pp)
 - Batfish: modeling the network as a dataplane — reachability, routing policy, ACL analysis, differential analysis between configs
 - pyATS / Genie: structured parsers, testbed YAML, golden-config snapshot and diff workflow
 - Nornir: inventory model, task plugins, parallel execution; pairing with Jinja2 for config rendering and pytest for assertions
+- NetBox as DCIM/IPAM source of truth: data model, REST/GraphQL API, `pynetbox`, swapping in `nornir-netbox` as a live inventory plugin
+- `nrx`: exporting a NetBox topology graph directly into a Containerlab lab (digital twin from source of truth to running fabric)
 - Full CI pipeline: `git push` → Batfish intent check → Containerlab topology test → pyATS golden diff → merge gate
 
 ### Chapter 23 — Simulation: NS-3, OMNET++, SST, GEM5 & SystemC (10 pp)

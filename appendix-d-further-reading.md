@@ -99,6 +99,15 @@ Tutorials for building custom agents in Python and Go that interact with SR Linu
 **Batfish Documentation** — [batfish.readthedocs.io](https://batfish.readthedocs.io)
 The Batfish network verification tool with Jupyter notebook examples for reachability, routing policy, and differential analysis. Supplements Chapter 22.
 
+**NetBox Documentation** — [netboxlabs.com/docs](https://netboxlabs.com/docs/netbox/)
+Reference for the DCIM/IPAM data model, REST/GraphQL API, custom scripts, and event rules. Supplements Chapter 22's use of NetBox as a Nornir inventory source.
+
+**nrx (netreplica exporter)** — [github.com/netreplica/nrx](https://github.com/netreplica/nrx)
+Exports a NetBox topology graph into a Containerlab, Cisco Modeling Labs, or NVIDIA Air lab definition. Supplements Chapter 22's NetBox-to-Containerlab digital-twin workflow.
+
+**openconfig/kne Documentation** — [github.com/openconfig/kne/tree/main/docs](https://github.com/openconfig/kne/tree/main/docs)
+Setup, topology creation, multi-node scaling, and vendor image guides for Kubernetes Network Emulation. Supplements Chapter 21's comparison of Containerlab and KNE.
+
 ---
 
 ## D.5 Companion Investigations

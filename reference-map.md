@@ -84,6 +84,7 @@ The common thread binding this ecosystem is **disaggregation**: the deliberate d
 | **GNS3** | GUI emulator (2008+); real IOS/IOS-XE/vMX/vSRX + Docker nodes | [Docs](https://docs.gns3.com) · [Appliances](https://gns3.com/marketplace/appliances) |
 | **EVE-NG** | Browser-based multi-user lab emulator; Community (free, 63 nodes) / Pro (paid) | [Docs](https://www.eve-ng.net/index.php/documentation/) |
 | **vrnetlab** | Containerises VM-based routers (vMX, vSRX, CSR1000v) for use inside Containerlab topologies | [GitHub](https://github.com/vrnetlab/vrnetlab) |
+| **KNE** (Kubernetes Network Emulation) | Textproto topology-as-code on Kubernetes; Meshnet CNI pod wiring + per-vendor operators; scales past one host for OpenConfig `ondatra` compliance testing | [GitHub](https://github.com/openconfig/kne) · [Docs](https://github.com/openconfig/kne/tree/main/docs) |
 
 ---
 
@@ -247,6 +248,8 @@ Version-controlling network config is only useful if it can be tested. These too
 | **Batfish** | Intent-based network config analyzer — catches routing bugs, ACL shadowing, and convergence failures before deployment | [Docs](https://batfish.readthedocs.io) · [GitHub](https://github.com/batfish/batfish) |
 | **pyATS / Genie** | Cisco's Python test framework for network devices; structured parsers, diff-based golden-config validation | [Docs](https://developer.cisco.com/docs/pyats/) · [GitHub](https://github.com/CiscoTestAutomation/pyats) |
 | **pytest-net / nornir** | Nornir is a Python automation framework for running tasks against device inventories; pairs naturally with pytest for CI | [Nornir docs](https://nornir.readthedocs.io) · [GitHub](https://github.com/nornir-automation/nornir) |
+| **NetBox** | DCIM/IPAM source of truth (sites, racks, devices, cables, prefixes, IPs, VLANs) behind a REST/GraphQL API; feeds Nornir inventory via `nornir-netbox` | [GitHub](https://github.com/netbox-community/netbox) · [netbox-docker](https://github.com/netbox-community/netbox-docker) · [pynetbox](https://github.com/netbox-community/pynetbox) |
+| **nrx** | Exports a NetBox topology graph (devices, roles, cables) directly into a Containerlab `.clab.yaml` (also CML, NVIDIA Air) — NetBox as the source that generates the running lab, not just documents it | [GitHub](https://github.com/netreplica/nrx) |
 
 ---
 

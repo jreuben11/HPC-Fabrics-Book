@@ -34,6 +34,11 @@
   - [When to Choose k3s](#when-to-choose-k3s)
   - [When to Choose kubeadm](#when-to-choose-kubeadm)
   - [CNI Compatibility Note](#cni-compatibility-note)
+- [21.11 Alternative Topology-as-Code: Kubernetes Network Emulation (KNE)](#2111-alternative-topology-as-code-kubernetes-network-emulation-kne)
+  - [Architecture](#architecture)
+  - [Topology Format: Textproto, Not YAML](#topology-format-textproto-not-yaml)
+  - [CLI Workflow](#cli-workflow)
+  - [Containerlab vs. KNE](#containerlab-vs-kne)
 - [Lab Walkthrough 21 — GPU Rail Fabric: Full Step-by-Step](#lab-walkthrough-21-gpu-rail-fabric-full-step-by-step)
   - [Step 1: Prerequisites Check](#step-1-prerequisites-check)
   - [Step 2: Pull Container Images](#step-2-pull-container-images)
@@ -666,6 +671,104 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
 ### CNI Compatibility Note
 
 **Cilium** — the CNI covered in **Chapter 12** — works with **Kind**, **k3s** (via `--flannel-backend=none`), and **kubeadm**. However, some Cilium features require a real Linux kernel rather than a container-in-container node: **eBPF host routing** and XDP acceleration do not function inside a Kind node because the container kernel is shared with the host and certain eBPF program types are restricted. For those exercises the book notes when a k3s VM or kubeadm bare-metal node is needed instead of Kind.
+
+---
+
+## 21.11 Alternative Topology-as-Code: Kubernetes Network Emulation (KNE)
+
+Containerlab orchestrates NOS containers directly against the Docker Engine on a single host. **KNE** (**Kubernetes Network Emulation**, `openconfig/kne`) takes the same "topology as code" philosophy but targets a Kubernetes cluster instead: every NOS instance runs as a pod, data-plane links are wired pod-to-pod by a CNI plugin built for the purpose, and per-vendor Kubernetes operators manage each node's lifecycle through CRDs. KNE was built inside the **OpenConfig** working group (Chapter 15) to give vendor certification suites and the `ondatra` Go test framework a reproducible, multi-vendor testbed that scales past what a single Docker host can hold — multi-node KNE clusters have been run with 150+ device topologies (see the KNE `multinode.md` guide), which is the scenario Containerlab's single-host model does not address.
+
+### Architecture
+
+```
+kne deploy deploy.yaml
+        │
+   Create/attach a Kind (or external) cluster
+        │
+   Install ingress (MetalLB) — LoadBalancer IP per node service
+        │
+   Install CNI (Meshnet) — gRPC topology agent per host,
+        wires veth pairs between node pods per the topology's links{}
+        │
+   Install vendor controllers (srl-controller, arista-ceoslab-operator,
+        cdnos-controller, lemming) — CRDs that manage node pod lifecycle
+
+kne create topology.pb.txt
+        │
+   Parse Topology protobuf → one Pod (+ Service) per node{}
+        │
+   Meshnet CNI creates the requested links{} between pods
+        │
+   Push initial config: file referenced by each node's config{}
+```
+
+**Meshnet** (the project's CNI) exists because Kubernetes' default pod networking gives every pod one interface into a flat cluster network — it has no notion of a specific point-to-point wire between two named interfaces on two named pods. Meshnet runs a per-host topology agent that reads link definitions from the topology and creates dedicated veth pairs between exactly the pods and interface names specified, so a topology's `a_node`/`a_int` ↔ `z_node`/`z_int` links behave like the deterministic wiring a physical lab (or Containerlab) provides.
+
+### Topology Format: Textproto, Not YAML
+
+Where Containerlab describes a topology as YAML, KNE describes it as a **text-format protocol buffer** of the `Topology` message defined in `proto/topo.proto`. A two-node example built entirely on **Lemming** — Google's open-source OpenConfig reference device, with no vendor licensing requirement — looks like this:
+
+```protobuf
+# lemming.pb.txt
+name: "lemming-twodut"
+nodes: {
+    name: "lemming1"
+    vendor: OPENCONFIG
+    model: "LEMMING"
+}
+nodes: {
+    name: "lemming2"
+    vendor: OPENCONFIG
+    model: "LEMMING"
+}
+links: {
+    a_node: "lemming1"
+    a_int: "eth1"
+    z_node: "lemming2"
+    z_int: "eth1"
+}
+```
+
+Multi-vendor topologies mix `vendor:` values (`ARISTA`, `CISCO`, `JUNIPER`, `NOKIA`, `KEYSIGHT`) in one file, each `node{}` optionally carrying an `interfaces{}` map to rename Linux-side `ethN` ports to the vendor's native interface naming (`et-0/0/0` on Junos, for example), and a `config{ file: "..." }` pointing at the initial config to push on creation.
+
+### CLI Workflow
+
+```bash
+# 1. Deploy a Kind cluster with MetalLB ingress, Meshnet CNI, and the
+#    controllers a topology's vendors require (from openconfig/kne's
+#    deploy/kne/kind-bridge.yaml)
+kne deploy deploy/kne/kind-bridge.yaml
+
+# 2. Load any vendor images the topology references into the Kind cluster
+docker pull ghcr.io/openconfig/lemming/lemming:ga
+kind load docker-image ghcr.io/openconfig/lemming/lemming:ga --name=kne
+
+# 3. Create the topology — parses the textproto, creates pods, wires links,
+#    pushes initial config; do not Ctrl-C, this can take minutes
+kne create examples/openconfig/lemming.pb.txt
+
+# 4. Interact with a node once its Service has a LoadBalancer IP
+kubectl get services -n lemming-twodut
+gnmic -a <lemming1-external-ip>:9339 --skip-verify -u admin -p admin \
+  get --path /interfaces/interface[name=eth1]/state/oper-status
+
+# 5. Tear down
+kne delete examples/openconfig/lemming.pb.txt
+```
+
+### Containerlab vs. KNE
+
+| | Containerlab | KNE |
+|---|---|---|
+| **Runtime** | Docker Engine, single host | Kubernetes (Kind or an external cluster) |
+| **Topology format** | YAML | Text-format protobuf (`topo.proto`) |
+| **Node lifecycle** | `containerlab` binary drives Docker directly | Per-vendor Kubernetes operators (CRDs) manage node pods |
+| **Data-plane wiring** | veth pairs created by the `containerlab` binary | Meshnet CNI gRPC topology agent |
+| **Scale** | Bounded by one host's CPU/RAM | Scales across a multi-node Kubernetes cluster |
+| **Primary consumer** | This book's labs; PR-gated CI on a single runner | OpenConfig `featureprofiles`/`ondatra` compliance suites; vendor certification |
+| **External traffic generation** | `iperf3` sidecars, host tools | Keysight Ixia-c via the `ixiatg` operator |
+
+For this book's labs — single-host, laptop-scale, git-diffable YAML reviewed in a PR — Containerlab remains the primary tool, and every lab walkthrough in this chapter and the rest of the book uses it. Reach for KNE instead when a topology must scale past one host's resources, or when the validation target is OpenConfig-model conformance against the same `ondatra`-based test suites vendors and hyperscalers run in their own certification pipelines.
 
 ---
 
@@ -1693,6 +1796,7 @@ act push --job deploy-and-test \
 - SR Linux, SONiC-VS, and FRR containers provide a full open-source NOS ecosystem runnable on a laptop.
 - vrnetlab enables VM-based commercial NOSes (IOS-XE, vMX) alongside containers in the same topology.
 - CI integration enables topology tests to run on every PR — treating network configuration like application code.
+- KNE (`openconfig/kne`) applies the same topology-as-code idea on Kubernetes instead of raw Docker, trading Containerlab's single-host simplicity for multi-node scale and native integration with OpenConfig's `ondatra` compliance test suites.
 
 ---
 
@@ -1709,6 +1813,11 @@ act push --job deploy-and-test \
 - [vrnetlab](https://github.com/hellt/vrnetlab)
 - [GNS3](https://www.gns3.com)
 - [EVE-NG](https://www.eve-ng.net)
+- [openconfig/kne (Kubernetes Network Emulation)](https://github.com/openconfig/kne)
+- [KNE documentation](https://github.com/openconfig/kne/tree/main/docs)
+- [Meshnet CNI](https://github.com/openconfig/kne/tree/main/manifests/meshnet)
+- [Lemming (OpenConfig reference device)](https://github.com/openconfig/lemming)
+- [OpenConfig featureprofiles / ondatra](https://github.com/openconfig/featureprofiles)
 - [GitHub Actions](https://docs.github.com/en/actions)
 - [Docker](https://docs.docker.com)
 - [gnmic (gNMI client)](https://gnmic.openconfig.net)

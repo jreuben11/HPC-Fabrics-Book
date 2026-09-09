@@ -26,6 +26,8 @@
   - [22.4.2 Running Tasks](#2242-running-tasks)
   - [22.4.3 Config Rendering and Push](#2243-config-rendering-and-push)
   - [22.4.4 pytest Integration](#2244-pytest-integration)
+  - [22.4.5 NetBox as Dynamic Source of Truth](#2245-netbox-as-dynamic-source-of-truth)
+  - [22.4.6 From NetBox to a Running Lab: `nrx` and Containerlab](#2246-from-netbox-to-a-running-lab-nrx-and-containerlab)
 - [22.5 Full CI Pipeline](#225-full-ci-pipeline)
 - [Lab Walkthrough 22 — Batfish → Containerlab → pyATS Pipeline](#lab-walkthrough-22-batfish-containerlab-pyats-pipeline)
   - [Step 1: Start the Batfish Server](#step-1-start-the-batfish-server)
@@ -68,6 +70,7 @@ Section 22.1 frames the software-engineering case for treating network configura
 **Batfish** https://www.batfish.org is a network configuration analysis tool that can find bugs and guarantee the correctness of (planned or current) network configurations. It enables network engineers to rapidly and safely evolve their network, without fear of outages or security breaches.
 **pyATS (Python Automated Test Systems)** is a Cisco-developed Python3-based DevOps ecosystem and framework for testing, validating, and managing network infrastructure. It enables network engineers to automate daily tasks, sanity checks, and complex testing across routers and switches from various vendors, featuring powerful parsing capabilities to turn CLI output into structured data.
 **Nornir** is an automation framework written in python to be used with python. Nornir will take care of dealing with the inventory where you have your host information, it will take care of dispatching the tasks to your devices and will provide a common framework to write “plugins”.
+**NetBox** is the open-source source-of-truth for network infrastructure — a DCIM/IPAM data model (sites, racks, devices, interfaces, cables, prefixes, IP addresses, VLANs) behind a REST/GraphQL API — that this chapter uses to replace Nornir's static inventory files with a live, queryable one.
 
 **Batfish** is deployed as a **Docker** container and exposes a **gRPC** API on port 9997; the **pybatfish** Python client connects to that API and is the primary interface for loading snapshots, running reachability questions, and asserting golden-config invariants. **pyATS** and **Genie** provide structured parsing of device CLI output against live or emulated devices, enabling deterministic golden-diff tests that detect unexpected state changes. **Nornir** is the Python-native automation framework that drives parallel device operations and integrates with **pytest** to form merge-gate CI assertions. **Containerlab** is installed alongside these tools because the chapter's pipeline deploys a live topology for **pyATS** tests to run against after **Batfish** static analysis passes.
 
@@ -110,6 +113,8 @@ uv pip install \
     nornir-netmiko \
     nornir-utils \
     nornir-jinja2 \
+    nornir-netbox \
+    pynetbox \
     deepdiff \
     pytest \
     pytest-html \
@@ -474,6 +479,87 @@ def test_all_bgp_sessions_established(nr):
             assert data["session_state"] == "Established", \
                 f"{host}: BGP neighbor {neighbor_ip} not established"
 ```
+
+### 22.4.5 NetBox as Dynamic Source of Truth
+
+The `inventory/hosts.yaml` and `inventory/groups.yaml` files in 22.4.1 are hand-maintained YAML — accurate on day one, and stale the day someone racks a new leaf switch without updating them. **NetBox** is the standard open-source **source of truth** for network infrastructure: a data model covering **DCIM** (sites, racks, devices, device types, interfaces, cables) and **IPAM** (prefixes, IP addresses, VLANs, VRFs) behind a REST and GraphQL API. NetBox does not touch devices directly — it only defines and validates *intended* state — which is exactly the separation of concerns the rest of this chapter's pipeline depends on: Nornir, Batfish, and pyATS each read from NetBox rather than embedding their own copy of the inventory.
+
+Run it locally via **netbox-docker**, the project's supported Compose deployment:
+
+```bash
+git clone -b release https://github.com/netbox-community/netbox-docker.git
+cd netbox-docker
+cp docker-compose.override.yml.example docker-compose.override.yml
+docker compose pull
+docker compose up -d
+docker compose exec netbox /opt/netbox/netbox/manage.py createsuperuser
+# NetBox UI + REST/GraphQL API at http://localhost:8000
+```
+
+**pynetbox** is the Python client for scripting against it. Modeling the spine-leaf-server rail fabric from Chapter 21's lab as NetBox objects — a site, a device role per tier, and a device per node — looks like this:
+
+```python
+import pynetbox
+
+nb = pynetbox.api("http://localhost:8000", token="<NETBOX_API_TOKEN>")
+
+site = nb.dcim.sites.create(name="lab-rail-fabric", slug="lab-rail-fabric")
+for role in ("spine", "leaf", "server"):
+    nb.dcim.device_roles.create(name=role, slug=role, color="0000ff")
+
+device_type = nb.dcim.device_types.get(model="SR Linux")
+nb.dcim.devices.create(
+    name="spine1", site=site.id,
+    device_type=device_type.id, role="spine", status="active",
+)
+
+# Query it back — this is what replaces the static inventory file
+spines = nb.dcim.devices.filter(role="spine", site="lab-rail-fabric")
+for d in spines:
+    print(d.name, d.primary_ip4)
+```
+
+The `nornir-netbox` plugin swaps NetBox in as Nornir's inventory source directly, so 22.4.1's `hosts.yaml`/`groups.yaml` files are replaced by a live query and 22.4.2's `nr.filter(groups=["spines"])` becomes a filter on NetBox's device role instead of a hand-maintained group:
+
+```yaml
+# nornir.yaml
+inventory:
+  plugin: NetBoxInventory2
+  options:
+    nb_url: "http://localhost:8000"
+    nb_token: "<NETBOX_API_TOKEN>"
+    filter_parameters:
+      site: "lab-rail-fabric"
+```
+
+```python
+from nornir import InitNornir
+
+nr = InitNornir(config_file="nornir.yaml")
+spines = nr.filter(role="spine")   # role now comes from NetBox, not a static group
+```
+
+NetBox can also render device configuration directly: uploading a Jinja2 **config template** and attaching it to a device role lets `GET /api/dcim/devices/<id>/render-config/` return a fully rendered config pulled from the same DCIM/IPAM data — a server-side alternative to the `nornir-jinja2` rendering in 22.4.3, useful when config generation needs to be triggered from NetBox's own event rules (e.g., automatically rendering a leaf's BGP config the moment its device role and site are set) rather than from a Nornir run.
+
+### 22.4.6 From NetBox to a Running Lab: `nrx` and Containerlab
+
+22.4.5 uses NetBox as the source of truth *for automation that talks to devices*. The same DCIM data can also generate the lab topology those devices run on in the first place, closing the loop back to Chapter 21's **Containerlab** labs. **`nrx`** (the **netreplica exporter**, `netreplica/nrx`) reads a topology graph out of NetBox — devices, roles, and cable connections for a given site or tag set — and exports it as a Containerlab `.clab.yaml` file, so the rail-fabric topology modeled in 22.4.5 becomes a runnable lab instead of a hand-written YAML file:
+
+```bash
+uv tool install nrx
+
+export NB_API_TOKEN='<NETBOX_API_TOKEN>'
+nrx --api http://localhost:8000 --output clab \
+    --site lab-rail-fabric --dir demo
+
+# Produces demo/lab-rail-fabric.clab.yaml from the spine/leaf/server
+# devices and cables created in 22.4.5 — deploy it exactly as in Chapter 21:
+sudo -E containerlab deploy -t demo/lab-rail-fabric.clab.yaml --reconfigure
+```
+
+`nrx` selects devices by `--site` and/or `--tags` (tags use AND logic), follows NetBox's Cable Tracing API through patch panels, and maps each device to a Containerlab node `kind`/`image` via its NetBox Platform `slug` and a `platform_map.yaml` file — so the node types stay driven by NetBox's own device-type data rather than a second, parallel definition. It can also render each device's config from NetBox as the node's Containerlab `startup-config`, and the same exporter targets Cisco Modeling Labs and NVIDIA Air output via `--output cml`/`--output air` using the identical NetBox graph. Without `--output`, `nrx` saves the graph as a CYJS file that the companion **`netreplica/graphite`** project renders as a browser-based topology diagram — useful for reviewing a fabric's cabling before deploying it.
+
+This turns NetBox into a **digital twin** source: a change to the intended topology (add a leaf, rewire a cable) in NetBox regenerates the Containerlab file that brings the lab in line with it, rather than editing the `.clab.yaml` from Chapter 21 by hand.
 
 ---
 
@@ -1453,6 +1539,8 @@ cat test-results.xml | grep -E 'tests=|failures=|errors='
 - Batfish catches routing bugs, ACL errors, and reachability regressions by simulating the dataplane from device configs — before any device is touched.
 - pyATS/Genie provides structured parsing of device output; golden diffs make post-change validation deterministic.
 - Nornir is the Python automation framework for parallel, inventory-driven device tasks; it integrates cleanly with pytest for CI assertions.
+- NetBox is the source of truth for DCIM/IPAM state; the `nornir-netbox` plugin swaps it in as Nornir's inventory so device lists and roles are live queries instead of hand-maintained YAML.
+- `nrx` exports that same NetBox topology graph directly into a Containerlab `.clab.yaml` (or CML/NVIDIA Air), so the lab topology is generated from the source of truth rather than hand-written.
 - The complete pipeline — Batfish → Containerlab → pyATS → merge gate — gives network changes the same rigor as application code changes.
 
 ---
@@ -1468,6 +1556,12 @@ cat test-results.xml | grep -E 'tests=|failures=|errors='
 - [nornir-netmiko](https://github.com/nornir-automation/nornir-netmiko)
 - [nornir-utils](https://github.com/nornir-automation/nornir-utils)
 - [nornir-jinja2](https://github.com/nornir-automation/nornir-jinja2)
+- [NetBox](https://github.com/netbox-community/netbox)
+- [netbox-docker](https://github.com/netbox-community/netbox-docker)
+- [pynetbox](https://github.com/netbox-community/pynetbox)
+- [nornir-netbox](https://github.com/wvandeun/nornir_netbox)
+- [nrx (netreplica exporter)](https://github.com/netreplica/nrx)
+- [netreplica/graphite (topology visualization)](https://github.com/netreplica/graphite)
 - [Netmiko](https://ktbyers.github.io/netmiko/)
 - [paramiko](https://www.paramiko.org)
 - [Jinja2](https://jinja.palletsprojects.com)

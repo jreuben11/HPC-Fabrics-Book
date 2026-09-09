@@ -15,6 +15,7 @@
   - [11.2.1 Encapsulation Format](#1121-encapsulation-format)
   - [11.2.2 VTEP Model](#1122-vtep-model)
   - [11.2.3 Linux VXLAN Interface](#1123-linux-vxlan-interface)
+  - [11.2.4 First-Principles Exercise: A Bare VXLAN Tunnel with Network Namespaces](#1124-first-principles-exercise-a-bare-vxlan-tunnel-with-network-namespaces)
 - [11.3 BGP-EVPN — Control Plane for VXLAN](#113-bgp-evpn-control-plane-for-vxlan)
   - [11.3.1 EVPN Route Types](#1131-evpn-route-types)
   - [11.3.2 Type 2 Route — MAC/IP Advertisement](#1132-type-2-route-macip-advertisement)
@@ -182,6 +183,64 @@ ip link add vxlan100 type vxlan id 100 group 239.1.1.1 dev eth0
 bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 10.0.0.2
 bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 10.0.0.3
 ```
+
+### 11.2.4 First-Principles Exercise: A Bare VXLAN Tunnel with Network Namespaces
+
+There is no dedicated "VXLAN simulator" tool distinct from running real VXLAN code — the Linux kernel's VXLAN driver *is* the reference data-plane implementation, so the standard way to see the encapsulation mechanics in isolation is to build a two-VTEP tunnel by hand with `ip netns` on a single laptop, with no BGP, no Containerlab, and no control plane at all. This is worth doing once before §11.3 hands the same job (populating remote-VTEP reachability and MAC/IP bindings) to BGP-EVPN automatically.
+
+Two network namespaces stand in for two independent hosts, each acting as its own VTEP:
+
+```bash
+# Two namespaces simulate two independent hosts, each running its own VTEP
+ip netns add vtep1
+ip netns add vtep2
+
+# A veth pair stands in for the IP underlay/fabric between the two VTEPs
+ip link add underlay1 type veth peer name underlay2
+ip link set underlay1 netns vtep1
+ip link set underlay2 netns vtep2
+
+ip netns exec vtep1 ip addr add 10.0.0.1/24 dev underlay1
+ip netns exec vtep1 ip link set underlay1 up
+ip netns exec vtep1 ip link set lo up
+
+ip netns exec vtep2 ip addr add 10.0.0.2/24 dev underlay2
+ip netns exec vtep2 ip link set underlay2 up
+ip netns exec vtep2 ip link set lo up
+
+# VXLAN interface inside each namespace, VNI 100, statically pointing at the
+# peer VTEP's underlay IP — this "remote" is exactly what BGP-EVPN Type-3
+# routes populate automatically once a control plane exists (§11.3)
+ip netns exec vtep1 ip link add vxlan100 type vxlan \
+    id 100 local 10.0.0.1 remote 10.0.0.2 dstport 4789 dev underlay1
+ip netns exec vtep1 ip link set vxlan100 up
+
+ip netns exec vtep2 ip link add vxlan100 type vxlan \
+    id 100 local 10.0.0.2 remote 10.0.0.1 dstport 4789 dev underlay2
+ip netns exec vtep2 ip link set vxlan100 up
+
+# Skip the bridge for brevity — address the VXLAN device directly as the
+# simulated "end host" on each side
+ip netns exec vtep1 ip addr add 192.168.1.1/24 dev vxlan100
+ip netns exec vtep2 ip addr add 192.168.1.2/24 dev vxlan100
+```
+
+With the tunnel up, `ping` across it and capture on the *underlay* interface to see the outer UDP/4789 encapsulation wrapping the inner ICMP exchange:
+
+```bash
+ip netns exec vtep1 tcpdump -i underlay1 -n udp port 4789 -c 3 &
+ip netns exec vtep1 ping -c 3 192.168.1.2
+
+# Expected tcpdump output — the inner frame riding inside the outer VXLAN/UDP header:
+# IP 10.0.0.1.51413 > 10.0.0.2.4789: VXLAN, flags [I] vni 100
+#   IP 192.168.1.1 > 192.168.1.2: ICMP echo request, id 1, seq 1
+
+# Clean up
+ip netns del vtep1
+ip netns del vtep2
+```
+
+This two-VTEP case needs only a single static `remote`. With three or more VTEPs there is no single peer to point at, so BUM traffic requires either a multicast group or the unicast head-end-replication list shown in §11.2.3 (`bridge fdb append ... dst <vtep-ip>`, one entry per remote VTEP) — precisely the list that BGP-EVPN Type-3 Inclusive Multicast routes build and maintain automatically at fabric scale, and that the Lab Walkthrough's Containerlab fabric exercises with a live BGP control plane instead of hand-typed `fdb` entries. Batfish (Chapter 22) complements both: it verifies the resulting VNI-to-VTEP and Type-5 route state against intent offline, without sending any live traffic.
 
 ---
 
@@ -861,6 +920,7 @@ sudo containerlab destroy -t evpn-lab.clab.yaml --cleanup
 ## Summary
 
 - VXLAN provides 24-bit segment IDs over a UDP encapsulation, enabling 16M isolated L2 domains over a shared IP underlay.
+- A bare two-VTEP VXLAN tunnel can be built by hand with `ip netns` and `ip link ... type vxlan` in a few commands, with no BGP or control plane — useful for seeing the raw encapsulation before automating it with EVPN.
 - BGP-EVPN replaces MAC flooding with BGP-distributed MAC/IP reachability; Type 2 routes carry MAC+IP, Type 3 routes carry VTEP membership, Type 5 routes carry IP prefixes for inter-subnet routing.
 - OVS is the datapath engine: OpenFlow-programmable, VXLAN-capable, with kernel and DPDK fast paths.
 - OVN is the intent-layer above OVS: logical switches, routers, and ACLs compiled down to per-host OVS flows by `ovn-controller`.

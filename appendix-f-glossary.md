@@ -94,6 +94,8 @@ Abbreviations and acronyms are cross-listed: if you encounter an acronym whose m
 
 **Jumbo Frames** — Ethernet frames with an MTU larger than the standard 1500 bytes, typically 9000 bytes (9K jumbo) in data center networks. Jumbo frames are required for RoCEv2 performance: the overhead of IP/UDP/IB headers on a 1500-byte MTU causes fragmentation and significant throughput degradation. A 9000-byte MTU is the minimum recommended for RDMA fabrics; switches must also be configured with an MTU of 9216 or larger to accommodate headers. See Chapter 2.
 
+**KNE (Kubernetes Network Emulation)** — An `openconfig/kne` project that runs network topology-as-code on Kubernetes instead of a single Docker host: nodes are pods managed by per-vendor operators (`srl-controller`, `arista-ceoslab-operator`, `lemming`), and the **Meshnet** CNI wires point-to-point links between them per a textproto topology file. Used by OpenConfig's `ondatra`-based vendor compliance suites; the book's labs use **Containerlab** instead for single-host simplicity. See Chapter 21.
+
 **KV Store (Key-Value Store)** — In distributed systems and networking contexts, an in-memory or persistent database providing O(1) key lookup. Examples include etcd, Redis, and Consul. In distributed training, KV stores (e.g., the PyTorch `c10d` rendezvous backend) are used for rank discovery and collective group initialization. See Chapter 4.
 
 **LibFabric (OFI)** — See **OFI**.
@@ -125,6 +127,10 @@ Abbreviations and acronyms are cross-listed: if you encounter an acronym whose m
 **NDK (Network Driver Kit / NVIDIA DOCA)** — In NVIDIA context, refers to the DOCA (Data Center Infrastructure-on-a-Chip Architecture) SDK for BlueField DPU application development. DOCA provides APIs for flow steering, crypto offload, DMA, and RegEx across BlueField hardware. See Chapter 10.
 
 **NETCONF (Network Configuration Protocol)** — An IETF protocol (RFC 6241) for network device configuration management, using XML encoding over SSH. NETCONF operations (get-config, edit-config, commit, lock) provide transactional configuration with candidate datastore support. YANG models define the configuration schema. See Chapter 14.
+
+**NetBox** — The open-source **DCIM** (Data Center Infrastructure Management) and **IPAM** (IP Address Management) source of truth for network infrastructure: a REST/GraphQL-accessible data model covering sites, racks, devices, interfaces, cables, prefixes, IP addresses, and VLANs. NetBox does not configure devices itself; automation tools (Nornir via the `nornir-netbox` plugin, Ansible, custom scripts using `pynetbox`) read it to drive device state toward what NetBox declares as intended. See Chapter 22.
+
+**nrx (netreplica exporter)** — A command-line tool that reads a topology graph (devices, roles, cable connections) out of **NetBox** via its API and exports it as a **Containerlab** topology file, or as Cisco Modeling Labs / NVIDIA Air topologies. Lets a NetBox site or tag selection generate a runnable lab directly from source-of-truth data instead of a hand-written topology YAML. See Chapter 22.
 
 **NUMA (Non-Uniform Memory Access)** — A memory architecture in multi-socket servers where each CPU socket has local DRAM accessed at lower latency, and can access remote (other socket) DRAM at higher latency. In AI networking, NUMA affinity is critical: the NIC, GPU, and process should all be on the same NUMA node to minimize cross-socket latency in GPUDirect RDMA paths. See Chapters 2 and 10.
 
